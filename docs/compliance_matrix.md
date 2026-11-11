@@ -13,7 +13,9 @@
 | 71540 | Качество конструирования базы знаний (п. 7.4) | Критерии на этапах ingest | `docs/data_quality.md` | Реализовано |
 | 847 | Provenance | Поля provenance, цитаты | `docs/provenance.md` | Реализовано |
 | 72664 | Модель качества ИИ | Метрики judge, прозрачность | `eval/report.json` (pass rate 0.833) | Реализовано |
-| 59898 | Оценка качества | Gold set, метрики | `plans/03-gold-set.md`, `eval/report.json` | Реализовано |
+| 59898 | Оценка качества | Gold set, метрики | `plans/03-gold-set.md`, `eval/gold_set_v2.yaml`, `eval/report.json` | Реализовано |
+| 847 | Provenance и ссылки | S3 presigned URL с `#page` | `app/storage/s3.py`, `docs/provenance.md` | Реализовано |
+| 965 | Тестирование | 12 типов вопросов, 37 проверок | `docs/test_plan.md`, `plans/05-plan-v2.md` | Реализовано |
 | 965 | Тестирование ИИ | Risk-based план, тесты | `docs/test_plan.md`, `tests/` | Реализовано |
 | 71752 | ТЗ | ТЗ по структуре ГОСТ | `docs/tz.md` | Реализовано |
 | 59276 | Доверие | Прозрачность, цитаты, отказы | `docs/trust.md` | Реализовано |

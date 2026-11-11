@@ -78,6 +78,16 @@ docker compose -f deploy/docker-compose.yml up -d qdrant
 
 Telegram: **@pbondarev_gostrag_bot** (доступ по whitelist).
 
+## Ссылки на источники
+
+Каждая цитата в боте содержит ссылку на PDF в Object Storage с якорем страницы:
+
+```
+https://storage.yandexcloud.net/<bucket>/gost/ai_gost_1/<file>.pdf?...#page=N
+```
+
+Presigned URL действует 7 дней; объекты в бакете не изменяются.
+
 ## Результаты
 
 | Метрика | Значение |

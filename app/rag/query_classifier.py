@@ -56,3 +56,23 @@ def extract_gosts(question: str) -> list[str]:
 
 def is_injection(question: str) -> bool:
     return classify_question(question) == "injection"
+
+
+TERM_RE = re.compile(
+    r"(?:что такое|дай определение|определение|что понимается под)\s+(.+?)(?:\s+(?:по|в)\s+ГОСТ|\s*$)",
+    re.IGNORECASE,
+)
+APPENDIX_RE = re.compile(r"приложени[еи]\s+([А-ЯA-Z]+)", re.IGNORECASE)
+
+
+def extract_term(question: str) -> str:
+    match = TERM_RE.search(question)
+    if match:
+        return match.group(1).strip(" .?»«")
+    return question.strip(" .?")
+
+
+def extract_appendix(question: str) -> str:
+    match = APPENDIX_RE.search(question)
+    return match.group(1) if match else ""
+

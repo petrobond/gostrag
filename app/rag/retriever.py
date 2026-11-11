@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from app.config import Settings
 from app.embeddings.base import Embedder
 from app.rag.chunk_store import ChunkStore
+from app.rag.query_classifier import (
+    classify_question,
+    extract_appendix,
+    extract_term,
+)
 from app.retrieval.bm25 import BM25Index
 from app.retrieval.fusion import rrf
 from app.storage.qdrant import QdrantStore
@@ -50,9 +55,16 @@ class Retriever:
         gost_number: str | None = None,
     ) -> list[RetrievedChunk]:
         exact_gost, exact_clause = self._extract_reference(query, gost_number)
+        question_type = classify_question(query)
         exact: list[dict] = []
         if exact_gost and exact_clause:
             exact = self.chunks.find_fuzzy(exact_gost, exact_clause)
+        elif question_type == "definition":
+            exact = self.chunks.find_term(extract_term(query), exact_gost)
+        elif question_type == "appendix" and exact_gost:
+            appendix = extract_appendix(query)
+            if appendix:
+                exact = self.chunks.find_appendix(exact_gost, appendix)
 
         dense_hits = await self.qdrant.search(
             self.embedder.embed_query(query), limit=20, gost_number=exact_gost
@@ -82,7 +94,21 @@ class Retriever:
                 continue
             result.append(self._to_chunk(payload, score))
             seen.add(chunk_id)
-        if result and any(marker in query.lower() for marker in LIST_MARKERS):
+        if result and question_type == "enumeration" and exact_gost:
+            gost_hits = [
+                hit
+                for hit in self.bm25.search(query, top_k=100)
+                if (payload := self.chunks.get(hit.chunk_id))
+                and payload["gost_number"] == exact_gost
+            ][:10]
+            for hit in gost_hits:
+                if hit.chunk_id in seen:
+                    continue
+                result.append(self._to_chunk(self.chunks.get(hit.chunk_id), 0.4))
+                seen.add(hit.chunk_id)
+                if len(result) >= 10:
+                    break
+        elif result and any(marker in query.lower() for marker in LIST_MARKERS):
             top = result[0]
             for row in self.chunks.section_chunks(top.doc_id, top.section):
                 if row["chunk_id"] in seen:

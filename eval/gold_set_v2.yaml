@@ -184,25 +184,25 @@ questions:
 
   # --- null: отказ ---
   - id: N01
-    category: null
+    category: null_query
     question: "Какой ГОСТ регулирует RAG-системы?"
     expected_answer: "Прямого стандарта нет."
     expected_sources: []
     expect_refusal: true
   - id: N02
-    category: null
+    category: null_query
     question: "Какие требования к векторным базам данных установлены в ГОСТах?"
     expected_answer: "Прямых требований нет."
     expected_sources: []
     expect_refusal: true
   - id: N03
-    category: null
+    category: null_query
     question: "Какой ГОСТ устанавливает требования к промпт-инжинирингу?"
     expected_answer: "Такого стандарта нет."
     expected_sources: []
     expect_refusal: true
   - id: N04
-    category: null
+    category: null_query
     question: "Какой стандарт заменяет отсутствующий ГОСТ Р 71484.1—2024?"
     expected_answer: "В корпусе часть 1 отсутствует."
     expected_sources: []

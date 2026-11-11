@@ -9,7 +9,7 @@ from app.ingest.extract import extract_pdf
 
 CLAUSE_RE = re.compile(r"^(\d+(?:\.\d+){1,4})\s+(.+)$")
 SECTION_RE = re.compile(r"^(\d{1,2})\s+([А-ЯЁ][^.]{2,90})$")
-APPENDIX_RE = re.compile(r"^Приложение\s+([А-ЯA-Z])\b(.*)$")
+APPENDIX_RE = re.compile(r"^Приложение\s+([А-ЯA-Z]{1,2})\b(.*)$")
 TOC_RE = re.compile(r"\.\s*\.\s*\.")
 PAGE_NUM_RE = re.compile(r"^\d{1,4}$")
 PENDING_CLAUSE_RE = re.compile(r"^(\d+(?:\.\d+){1,4})$")
@@ -128,22 +128,38 @@ def parse_document(pdf_path: Path) -> ParsedDocument:
             clauses.append(current)
         current = None
 
-    for line in lines:
+    for idx, line in enumerate(lines):
         text = line.text.strip()
         if not text or _is_toc_line(text) or _is_header(text) or _is_page_number(text):
             continue
+        next_text = lines[idx + 1].text.strip() if idx + 1 < len(lines) else ""
 
         m_app = APPENDIX_RE.match(text)
-        if m_app:
+        if m_app and started and (
+            "справочное" in text.lower()
+            or "обязательное" in text.lower()
+            or "справочное" in next_text.lower()
+            or "обязательное" in next_text.lower()
+        ):
             flush()
             appendix = m_app.group(1)
             section = f"Приложение {appendix}"
             section_title = m_app.group(2).strip()
+            current = Clause(
+                number=section,
+                title=section_title,
+                text=section_title,
+                page=line.page,
+                section=section,
+                section_title=section_title,
+                appendix=appendix,
+            )
             continue
 
         m_sec = SECTION_RE.match(text)
         if m_sec:
             flush()
+            appendix = ""
             section = m_sec.group(1)
             section_title = m_sec.group(2).strip()
             if section == "1" and "область применения" in section_title.lower():
