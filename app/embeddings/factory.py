@@ -12,4 +12,7 @@ def get_embedder(settings: Settings) -> Embedder:
         return GigaChatEmbedder(settings)
     from app.embeddings.local_e5 import LocalE5Embedder
 
-    return LocalE5Embedder()
+    return LocalE5Embedder(
+        cache_dir=settings.embedding_cache_dir,
+        threads=settings.embedding_threads or None,
+    )

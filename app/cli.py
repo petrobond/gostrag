@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import time
 import uuid
 from collections import Counter
 from dataclasses import asdict
@@ -128,6 +129,7 @@ async def _embed_and_upsert(
     store = QdrantStore(qdrant_url, collection)
     await store.ensure_collection(embedder.dim)
     total = 0
+    started = time.perf_counter()
     for start in range(0, len(chunks), batch_size):
         batch = chunks[start : start + batch_size]
         vectors = embedder.embed_documents([row["text"] for row in batch])
@@ -141,7 +143,8 @@ async def _embed_and_upsert(
         ]
         await store.upsert(points)
         total += len(points)
-        print(f"embedded {total}/{len(chunks)}", flush=True)
+        elapsed = time.perf_counter() - started
+        print(f"embedded {total}/{len(chunks)} in {elapsed:.1f}s ({total / elapsed:.1f}/s)", flush=True)
     await store.close()
     return total
 

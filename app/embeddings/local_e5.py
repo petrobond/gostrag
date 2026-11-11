@@ -8,8 +8,17 @@ class LocalE5Embedder:
 
     dim = 1024
 
-    def __init__(self, model_name: str = "intfloat/multilingual-e5-large") -> None:
-        self.model = TextEmbedding(model_name=model_name)
+    def __init__(
+        self,
+        model_name: str = "intfloat/multilingual-e5-large",
+        cache_dir: str | None = None,
+        threads: int | None = None,
+    ) -> None:
+        self.model = TextEmbedding(
+            model_name=model_name,
+            cache_dir=cache_dir or None,
+            threads=threads,
+        )
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return [list(map(float, vector)) for vector in self.model.embed(texts, batch_size=16)]

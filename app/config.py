@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     )
     gigachat_embedding_dim: int = Field(default=2048, alias="GIGACHAT_EMBEDDING_DIM")
     embedding_provider: str = Field(default="local", alias="EMBEDDING_PROVIDER")
+    embedding_cache_dir: str = Field(default="", alias="EMBEDDING_CACHE_DIR")
+    embedding_threads: int = Field(default=0, alias="EMBEDDING_THREADS")
 
     # Yandex AI Studio fallback
     yc_folder_id: str = Field(default="", alias="YC_FOLDER_ID")

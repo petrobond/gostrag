@@ -39,7 +39,7 @@ services:
     restart: unless-stopped
 
   qdrant:
-    image: qdrant/qdrant:v1.12.4
+    image: qdrant/qdrant:v1.20.0
     volumes:
       - qdrant_storage:/qdrant/storage
     ports:
