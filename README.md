@@ -74,6 +74,27 @@ docker compose -f deploy/docker-compose.yml up -d qdrant
 Отчёт сохраняется в `reports/{version}/{user_id}/` и идемпотентен: повторный запуск
 возвращает существующий отчёт. Manifest содержит версию, git commit, git tag и SHA-256.
 
+## Бот
+
+Telegram: **@pbondarev_gostrag_bot** (доступ по whitelist).
+
+## Результаты
+
+| Метрика | Значение |
+|---|---|
+| Recall@6 | 1.000 (12/12) |
+| Judge pass rate | 0.833 (25/30) |
+| Faithfulness | 0.83 |
+| Citation | 0.70 |
+| Аудит ГОСТ: требований | 60 |
+| Соответствует | 32 |
+| Частично | 7 |
+| Не соответствует | 1 |
+| Не применимо | 20 |
+| Compliance rate (от применимых) | 80% |
+
+Подробнее — `docs/eval_results.md`, `eval/report.json`, `reports/0.1.0/478645956/audit.md`.
+
 ## Ограничения
 
 - GigaChat freemium: 1 одновременный поток → очередь.

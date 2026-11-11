@@ -12,6 +12,7 @@ from app.storage.qdrant import QdrantStore
 
 GOST_RE = re.compile(r"(ГОСТ\s*Р|ПНСТ)\s*(\d+(?:\.\d+)?)\s*[—–-]\s*(\d{4})", re.IGNORECASE)
 CLAUSE_RE = re.compile(r"(?:п\.?|пункт)\s*(\d+(?:\.\d+)+)", re.IGNORECASE)
+LIST_MARKERS = ("какие", "перечисли", "этапы", "слои", "виды", "характеристики", "состав")
 
 
 @dataclass(slots=True)
@@ -80,6 +81,16 @@ class Retriever:
             if not payload:
                 continue
             result.append(self._to_chunk(payload, score))
+            seen.add(chunk_id)
+        if result and any(marker in query.lower() for marker in LIST_MARKERS):
+            top = result[0]
+            for row in self.chunks.section_chunks(top.doc_id, top.section):
+                if row["chunk_id"] in seen:
+                    continue
+                result.append(self._to_chunk(row, 0.5))
+                seen.add(row["chunk_id"])
+                if len(result) >= 10:
+                    break
         return result[: max(top_k, len(exact))]
 
     @staticmethod

@@ -148,6 +148,16 @@ def parse_document(pdf_path: Path) -> ParsedDocument:
             section_title = m_sec.group(2).strip()
             if section == "1" and "область применения" in section_title.lower():
                 started = True
+            if started:
+                current = Clause(
+                    number=section,
+                    title=section_title,
+                    text=section_title,
+                    page=line.page,
+                    section=section,
+                    section_title=section_title,
+                    appendix=appendix,
+                )
             continue
 
         m_cl = CLAUSE_RE.match(text)
