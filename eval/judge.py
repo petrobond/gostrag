@@ -123,6 +123,16 @@ async def evaluate(
 
     scored = [r for r in results if r.get("judge")]
     total = len(scored) or 1
+    by_category: dict[str, dict] = {}
+    for row in scored:
+        category = row.get("category", "unknown")
+        bucket = by_category.setdefault(category, {"total": 0, "pass": 0})
+        bucket["total"] += 1
+        if row["judge"].get("verdict") == "pass":
+            bucket["pass"] += 1
+    for bucket in by_category.values():
+        bucket["pass_rate"] = round(bucket["pass"] / max(bucket["total"], 1), 4)
+
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "corpus_version": gold.get("corpus_version"),
@@ -133,6 +143,7 @@ async def evaluate(
             key: round(sum(float(r["judge"].get(key, 0) or 0) for r in scored) / total, 4)
             for key in ("faithfulness", "relevancy", "citation", "refusal")
         },
+        "by_category": by_category,
         "results": results,
     }
     return report

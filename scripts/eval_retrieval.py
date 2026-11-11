@@ -20,12 +20,16 @@ from app.retrieval.bm25 import BM25Index  # noqa: E402
 from app.storage.qdrant import QdrantStore  # noqa: E402
 
 SOURCE_RE = re.compile(r"(.+?),\s*п\.\s*([\d.]+)")
+APPENDIX_RE = re.compile(r"(.+?),\s*приложение\s+([А-ЯA-Z]+)", re.IGNORECASE)
 
 
-def parse_source(text: str) -> tuple[str, str] | None:
+def parse_source(text: str) -> tuple[str, str, str] | None:
     match = SOURCE_RE.match(text)
     if match:
-        return match.group(1).strip(), match.group(2).strip()
+        return match.group(1).strip(), "clause", match.group(2).strip()
+    match = APPENDIX_RE.match(text)
+    if match:
+        return match.group(1).strip(), "appendix", match.group(2).strip()
     return None
 
 
@@ -48,12 +52,17 @@ async def main(gold_path: Path, corpus: Path, index: Path, qdrant_url: str, top_
                 continue
             total += 1
             retrieved = await retriever.retrieve(item["question"], top_k=top_k)
-            found = any(
-                chunk.gost_number == gost
-                and (chunk.clause == clause or chunk.clause.startswith(clause + "."))
-                for chunk in retrieved
-                for gost, clause in sources
-            )
+            found = False
+            for chunk in retrieved:
+                for gost, kind, value in sources:
+                    if chunk.gost_number != gost:
+                        continue
+                    if kind == "clause" and (
+                        chunk.clause == value or chunk.clause.startswith(value + ".")
+                    ):
+                        found = True
+                    if kind == "appendix" and chunk.section.lower().endswith(value.lower()):
+                        found = True
             if found:
                 hits += 1
             else:

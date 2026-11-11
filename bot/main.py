@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import sys
 from pathlib import Path
@@ -14,12 +15,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import get_settings  # noqa: E402
 from app.guard.rate_limit import SlidingWindowLimiter  # noqa: E402
 from app.rag.service import AskService  # noqa: E402
+from app.storage.s3 import S3Store  # noqa: E402
 
 settings = get_settings()
 dp = Dispatcher()
 hour_limiter = SlidingWindowLimiter(settings.hourly_questions_per_user, 3600)
 day_limiter = SlidingWindowLimiter(settings.daily_questions_per_user, 86400)
 service: AskService | None = None
+s3 = S3Store(settings)
+
+
+def citation_html(citation) -> str:
+    label = f"{citation.gost}, п. {citation.clause}, с. {citation.page}"
+    url = s3.url_for(citation.file, citation.page) if citation.file else ""
+    if url:
+        return f'<a href="{html.escape(url, quote=True)}">{html.escape(label)}</a>'
+    return html.escape(label)
 
 
 def format_answer(result) -> str:
@@ -28,13 +39,12 @@ def format_answer(result) -> str:
         text = "В корпусе нет ответа на этот вопрос."
         if answer.missing:
             text += "\nНе хватает: " + ", ".join(answer.missing)
-        return text
-    text = answer.answer.strip()
+        return html.escape(text)
+    text = html.escape(answer.answer.strip())
     if answer.citations:
         lines = ["", "Источники:"]
         for citation in answer.citations:
-            mark = "" if citation.valid else " (не подтверждено)"
-            lines.append(f"• {citation.gost}, п. {citation.clause}, с. {citation.page}{mark}")
+            lines.append(f"• {citation_html(citation)}")
         text += "\n".join(lines)
     return text
 
@@ -59,7 +69,8 @@ def split_message(text: str, limit: int = 4000) -> list[str]:
 async def cmd_start(message: Message) -> None:
     await message.answer(
         "Привет! Я отвечаю на вопросы по российским стандартам ИИ (ГОСТ Р / ПНСТ).\n\n"
-        "Просто задайте вопрос текстом. Я приведу цитаты: ГОСТ, пункт, страницу.\n"
+        "Просто задайте вопрос текстом. Я приведу цитаты: ГОСТ, пункт, страницу "
+        "и ссылку на PDF с переходом на нужную страницу.\n\n"
         "Команды: /help, /gosts, /ask <вопрос>."
     )
 
@@ -88,7 +99,8 @@ async def cmd_gosts(message: Message) -> None:
             f"• {doc['gost_number'] or doc['doc_id']} — {(doc['title'] or '')[:80]} "
             f"({doc['chunks']} фрагментов)"
         )
-    await message.answer("\n".join(lines)[:4000])
+    for part in split_message("\n".join(lines)):
+        await message.answer(part)
 
 
 @dp.message(Command("stats"))
@@ -150,11 +162,11 @@ async def handle_question(message: Message, question: str) -> None:
         result = await service.ask(question)
         text = format_answer(result)
     except Exception as exc:  # noqa: BLE001
-        text = f"Ошибка при обработке вопроса: {exc.__class__.__name__}"
+        text = html.escape(f"Ошибка при обработке вопроса: {exc.__class__.__name__}")
     parts = split_message(text)
-    await placeholder.edit_text(parts[0])
+    await placeholder.edit_text(parts[0], parse_mode="HTML", disable_web_page_preview=True)
     for part in parts[1:]:
-        await message.answer(part)
+        await message.answer(part, parse_mode="HTML", disable_web_page_preview=True)
 
 
 async def main() -> None:

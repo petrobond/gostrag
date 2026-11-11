@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from app.ingest.parse import Clause, ParsedDocument
 
 MAX_CHARS = 1800
-MIN_CHARS = 120
+MIN_CHARS = 40
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 
 

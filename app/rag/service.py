@@ -9,6 +9,7 @@ from app.embeddings.factory import get_embedder
 from app.llm.chain import LLMChain
 from app.rag.chunk_store import ChunkStore
 from app.rag.generator import Answer, Generator
+from app.rag.query_classifier import classify_question, extract_gosts
 from app.rag.retriever import Retriever, RetrievedChunk
 from app.retrieval.bm25 import BM25Index
 from app.storage.qdrant import QdrantStore
@@ -39,7 +40,24 @@ class AskService:
 
     async def ask(self, question: str, top_k: int | None = None) -> AskResult:
         started = time.perf_counter()
-        chunks = await self.retriever.retrieve(question, top_k=top_k or self.settings.max_top_k)
+        question_type = classify_question(question)
+        if question_type == "injection":
+            answer = Answer(
+                answer=(
+                    "Извините, я не выполняю такие инструкции. "
+                    "Могу ответить на вопросы по российским стандартам ИИ."
+                ),
+                refused=True,
+                model="guard",
+                provider="rules",
+            )
+            return AskResult(answer=answer, chunks=[], latency_ms=0)
+
+        gosts = extract_gosts(question)
+        if question_type == "comparison" and len(gosts) >= 2:
+            chunks = await self.retriever.retrieve_multi(question, gosts, top_k=3)
+        else:
+            chunks = await self.retriever.retrieve(question, top_k=top_k or self.settings.max_top_k)
         answer = await self.generator.generate(question, [asdict(chunk) for chunk in chunks])
         latency_ms = int((time.perf_counter() - started) * 1000)
         return AskResult(answer=answer, chunks=chunks, latency_ms=latency_ms)

@@ -21,6 +21,7 @@ class Citation:
     clause: str
     page: int
     quote: str = ""
+    file: str = ""
     valid: bool = False
     page_valid: bool = False
     quote_valid: bool = False
@@ -86,6 +87,7 @@ class Generator:
             chunk = allowed.get((citation.gost, citation.clause))
             citation.valid = chunk is not None
             if chunk is not None:
+                citation.file = str(chunk.get("provenance", {}).get("file", ""))
                 citation.page_valid = citation.page in (0, int(chunk.get("page", 0)))
                 if citation.quote:
                     citation.quote_valid = _norm(citation.quote) in _norm(chunk["text"])

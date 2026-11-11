@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     deepseek_base_url: str = Field(default="https://api.deepseek.com", alias="DEEPSEEK_BASE_URL")
     deepseek_model: str = Field(default="deepseek-flash", alias="DEEPSEEK_MODEL")
 
+    # S3 / Object Storage
+    s3_endpoint: str = Field(default="https://storage.yandexcloud.net", alias="S3_ENDPOINT")
+    s3_bucket: str = Field(default="", alias="S3_BUCKET")
+    s3_access_key: str = Field(default="", alias="S3_ACCESS_KEY")
+    s3_secret_key: str = Field(default="", alias="S3_SECRET_KEY")
+    s3_region: str = Field(default="ru-central1", alias="S3_REGION")
+    s3_prefix: str = Field(default="gost/", alias="S3_PREFIX")
+
     # Telegram
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_user_ids: str = Field(default="", alias="TELEGRAM_USER_IDS")

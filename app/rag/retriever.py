@@ -93,6 +93,23 @@ class Retriever:
                     break
         return result[: max(top_k, len(exact))]
 
+    async def retrieve_multi(
+        self,
+        query: str,
+        gost_numbers: list[str],
+        top_k: int = 3,
+    ) -> list[RetrievedChunk]:
+        """Multi-hop retrieval: separate search per GOST, then merge."""
+        merged: list[RetrievedChunk] = []
+        seen: set[str] = set()
+        for gost in gost_numbers:
+            for chunk in await self.retrieve(query, top_k=top_k, gost_number=gost):
+                if chunk.chunk_id in seen:
+                    continue
+                seen.add(chunk.chunk_id)
+                merged.append(chunk)
+        return merged
+
     @staticmethod
     def _extract_reference(query: str, gost_number: str | None) -> tuple[str | None, str | None]:
         gost = gost_number
