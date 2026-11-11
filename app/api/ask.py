@@ -23,6 +23,7 @@ async def ask(payload: AskRequest, request: Request) -> dict:
         "answer": result.answer.answer,
         "citations": [asdict(citation) for citation in result.answer.citations],
         "refused": result.answer.refused,
+        "general_knowledge": result.answer.general_knowledge,
         "missing": result.answer.missing,
         "confidence": result.answer.confidence,
         "model": result.answer.model,

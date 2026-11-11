@@ -132,3 +132,33 @@
 - Таблицы в PDF извлекаются как текст; нужен отдельный парсер.
 - Judge склонен строго оценивать сравнения.
 - Целевые метрики требуют повторной калибровки на 20 примерах.
+
+---
+
+## 7. Прогресс v2.1 (release/v2.0.0)
+
+### 7.1 Исправленные дефекты
+
+| № | Дефект | Файл | Эффект |
+|---|---|---|---|
+| 1 | Dense-поиск отбрасывался: `DenseHit.chunk_id` = UUID точки Qdrant, а не `chunk_id` из payload | `app/storage/qdrant.py` | dense-хиты больше не теряются |
+| 2 | Multi-hop перетирал переданный ГОСТ первым упоминанием в вопросе | `app/rag/retriever.py` | M01/M02/M04 видят оба документа |
+| 3 | Multi-hop depth 3 → 4 + область применения каждого документа | `app/rag/retriever.py` | сравнения получают контекст обоих стандартов |
+| 4 | Enumeration не раскрывал группу пунктов | `app/rag/retriever.py`, `app/rag/chunk_store.py` | E02: 6.1–6.6, E04: 4.1–4.7 |
+| 5 | Comparison с одним ГОСТом не делился на сущности | `app/rag/retriever.py` | M05: 5.3.4 + 5.7.3 |
+| 6 | Цитаты не нормализовались («пункт 5.3.4, страница 19») | `app/rag/generator.py` | citation precision |
+| 7 | Clause lookup галлюцинировал при верном контексте | `app/rag/service.py` | extractive-ответ по пункту |
+| 8 | Нет даты введения в индексе | `app/ingest/chunk.py` | meta-чанк на документ |
+| 9 | Таблицы сплющивались в строку | `app/ingest/extract.py`, `app/ingest/parse.py`, `app/ingest/chunk.py` | pdfplumber + PyMuPDF fallback, 330 table-чанков |
+| 10 | Judge считал citation=0 при отказах | `eval/judge.py` | n/a вместо 0 |
+
+### 7.2 Результаты
+
+| Прогон | Pass rate | definition | clause_lookup | enumeration | comparison | table | binary | temporal |
+|---|---|---|---|---|---|---|---|---|
+| baseline v2 | 0.676 | 6/6 | 4/5 | 3/5 | 0/5 | 1/2 | 0/1 | 0/1 |
+| после P0+P1 | 0.757 | 6/6 | 3/5 | 4/5 | 2/5 | 1/2 | 0/1 | 1/1 |
+| **финал (переиндексация + таблицы + meta)** | **0.946 (35/37)** | 6/6 | 5/5 | 4/5 | 4/5 | 2/2 | 1/1 | 1/1 |
+
+Итоговые метрики judge: faithfulness 0.887, relevancy 0.887, citation 0.869, refusal 0.919.
+Recall@8 = 1.000 (18/18). Не прошли E04 и M04 — см. `docs/eval_results_v2.md`.

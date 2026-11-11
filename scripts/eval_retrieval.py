@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import get_settings  # noqa: E402
 from app.embeddings.factory import get_embedder  # noqa: E402
 from app.rag.chunk_store import ChunkStore  # noqa: E402
+from app.rag.query_classifier import extract_gosts  # noqa: E402
 from app.rag.retriever import Retriever  # noqa: E402
 from app.retrieval.bm25 import BM25Index  # noqa: E402
 from app.storage.qdrant import QdrantStore  # noqa: E402
@@ -51,7 +52,13 @@ async def main(gold_path: Path, corpus: Path, index: Path, qdrant_url: str, top_
             if not sources:
                 continue
             total += 1
-            retrieved = await retriever.retrieve(item["question"], top_k=top_k)
+            gosts = extract_gosts(item["question"])
+            if item.get("category") == "comparison" and len(gosts) >= 2:
+                retrieved = await retriever.retrieve_comparison(
+                    item["question"], gosts, top_k=top_k
+                )
+            else:
+                retrieved = await retriever.retrieve(item["question"], top_k=top_k)
             found = False
             for chunk in retrieved:
                 for gost, kind, value in sources:

@@ -94,7 +94,12 @@ async def cmd_gosts(message: Message) -> None:
         return
     documents = json.loads(path.read_text(encoding="utf-8"))
     lines = ["Загруженные стандарты:"]
+    seen: set[str] = set()
     for doc in documents:
+        key = doc["gost_number"] or doc["doc_id"]
+        if key in seen:
+            continue
+        seen.add(key)
         lines.append(
             f"• {doc['gost_number'] or doc['doc_id']} — {(doc['title'] or '')[:80]} "
             f"({doc['chunks']} фрагментов)"

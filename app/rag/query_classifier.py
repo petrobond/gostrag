@@ -54,6 +54,11 @@ def extract_gosts(question: str) -> list[str]:
     return result
 
 
+def extract_clause(question: str) -> str | None:
+    match = CLAUSE_RE.search(question)
+    return match.group(1) if match else None
+
+
 def is_injection(question: str) -> bool:
     return classify_question(question) == "injection"
 
@@ -63,6 +68,22 @@ TERM_RE = re.compile(
     re.IGNORECASE,
 )
 APPENDIX_RE = re.compile(r"приложени[еи]\s+([А-ЯA-Z]+)", re.IGNORECASE)
+COMPARISON_RE = re.compile(
+    r"чем\s+отлича(?:ются|ется|ет)\s+(.+?)\s+и\s+(.+?)"
+    r"(?:\s+(?:в|по)\s+ГОСТ|\s*\?|$)",
+    re.IGNORECASE,
+)
+
+
+def extract_comparison_entities(question: str) -> list[str]:
+    """Split "чем отличаются A и B" into A and B for per-entity lookup."""
+    match = COMPARISON_RE.search(question)
+    if not match:
+        return []
+    left = match.group(1).strip(" .,?»«")
+    right = match.group(2).strip(" .,?»«")
+    return [entity for entity in (left, right) if entity]
+
 
 
 def extract_term(question: str) -> str:

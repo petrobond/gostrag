@@ -1,4 +1,10 @@
-from app.rag.query_classifier import classify_question, extract_gosts, is_injection
+from app.rag.query_classifier import (
+    classify_question,
+    extract_clause,
+    extract_comparison_entities,
+    extract_gosts,
+    is_injection,
+)
 
 
 def test_definition():
@@ -29,3 +35,14 @@ def test_extract_gosts():
 
 def test_binary():
     assert classify_question("Является ли применение ГОСТ обязательным?") == "binary"
+
+
+def test_extract_clause():
+    assert extract_clause("Что говорится в п. 6.2.5 ГОСТ Р 71484.2—2024?") == "6.2.5"
+
+
+def test_extract_comparison_entities():
+    entities = extract_comparison_entities(
+        "Чем отличаются веб-поиск и поиск по семантическому графу в ГОСТ Р 59926—2021?"
+    )
+    assert entities == ["веб-поиск", "поиск по семантическому графу"]

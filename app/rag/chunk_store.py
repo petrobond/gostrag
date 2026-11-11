@@ -25,6 +25,14 @@ def _stem(word: str) -> str:
     return word[:5]
 
 
+def _clause_key(clause: str) -> tuple:
+    """Sort clauses numerically: 6.2 < 6.10, non-numeric parts go last."""
+    parts = []
+    for part in clause.replace("#", ".").split("."):
+        parts.append((0, int(part), "") if part.isdigit() else (1, 0, part))
+    return tuple(parts)
+
+
 class ChunkStore:
     """In-memory chunk payloads keyed by chunk_id, GOST and clause."""
 
@@ -32,6 +40,7 @@ class ChunkStore:
         self.by_id: dict[str, dict] = {}
         self.by_key: dict[tuple[str, str], dict] = {}
         self.by_gost: dict[str, list[dict]] = {}
+        self.by_doc: dict[str, list[dict]] = {}
         self.by_section: dict[tuple[str, str], list[dict]] = {}
         self._title_tokens: dict[str, set[str]] = {}
         path = corpus_dir / "chunks.jsonl"
@@ -41,11 +50,13 @@ class ChunkStore:
                 self.by_id[row["chunk_id"]] = row
                 self.by_key[(row["gost_number"], row["clause"])] = row
                 self.by_gost.setdefault(row["gost_number"], []).append(row)
+                self.by_doc.setdefault(row["doc_id"], []).append(row)
                 self.by_section.setdefault((row["doc_id"], row.get("section", "")), []).append(row)
                 title = row.get("clause_title", "") or row["text"][:120]
                 self._title_tokens[row["chunk_id"]] = {
                     _stem(token) for token in TOKEN_RE.findall(title.lower())
                 }
+
 
     def get(self, chunk_id: str) -> dict | None:
         return self.by_id.get(chunk_id)
@@ -102,7 +113,43 @@ class ChunkStore:
 
     def section_chunks(self, doc_id: str, section: str) -> list[dict]:
         rows = self.by_section.get((doc_id, section), [])
-        return sorted(rows, key=lambda row: row["clause"])
+        return sorted(rows, key=lambda row: _clause_key(row["clause"]))
+
+    def find_meta(self, gost_number: str) -> list[dict]:
+        rows = [
+            row
+            for row in self.by_gost.get(gost_number, [])
+            if row.get("chunk_type") == "meta"
+        ]
+        return rows[:1]
+
+    def meta_by_doc_type(self) -> list[dict]:
+        """One representative meta chunk per document type (ГОСТ Р, ПНСТ)."""
+        result: dict[str, dict] = {}
+        for row in self.by_id.values():
+            if row.get("chunk_type") == "meta":
+                result.setdefault(row.get("doc_type", ""), row)
+        return list(result.values())
+
+    def table_chunks(self, gost_number: str) -> list[dict]:
+        return [
+            row
+            for row in self.by_gost.get(gost_number, [])
+            if row.get("chunk_type") == "table"
+        ]
+
+    def clause_siblings(self, doc_id: str, clause: str, limit: int = 12) -> list[dict]:
+        """All chunks of the same top-level subsection: "4.2" -> 4., 4.1 ... 4.7."""
+        head = clause.split(".")[0]
+        if not head.isdigit():
+            return []
+        rows = [
+            row
+            for row in self.by_doc.get(doc_id, [])
+            if row["clause"].split(".")[0] == head
+        ]
+        rows.sort(key=lambda row: _clause_key(row["clause"]))
+        return rows[:limit]
 
     def __len__(self) -> int:
         return len(self.by_id)

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.ingest.clean import Line, clean_pages, pages_to_lines
-from app.ingest.extract import extract_pdf
+from app.ingest.extract import extract_pdf, extract_tables
 
 CLAUSE_RE = re.compile(r"^(\d+(?:\.\d+){1,4})\s+(.+)$")
 SECTION_RE = re.compile(r"^(\d{1,2})\s+([А-ЯЁ][^.]{2,90})$")
@@ -17,6 +17,8 @@ HEADER_RE = re.compile(r"^(ГОСТ\s*Р|ПНСТ)\s*\d+[—-]\d{4}$")
 GOST_NUMBER_RE = re.compile(r"(ГОСТ\s*Р|ПНСТ)\s*(\d+(?:\.\d+)?)[—–-](\d{4})")
 ISO_RE = re.compile(r"\((ИСО/МЭК|ISO/IEC)\s*([^)]+)\)")
 VALID_FROM_RE = re.compile(r"Дата введения\s*[—–-]\s*(\d{4}[—–-]\d{2}[—–-]\d{2})")
+TABLE_CAPTION_RE = re.compile(r"^Таблица\s+([А-ЯA-Z]?\.?\s?\d+(?:\.\d+)?)\s*[—–-]?\s*(.*)$")
+TABLE_HINT_RE = re.compile(r"Таблица\s+[А-ЯA-Z]?\.?\s?\d", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -43,9 +45,19 @@ class Clause:
 
 
 @dataclass(slots=True)
+class Table:
+    page: int
+    index: int
+    rows: list[list[str]]
+    number: str = ""
+    title: str = ""
+
+
+@dataclass(slots=True)
 class ParsedDocument:
     meta: DocMeta
     clauses: list[Clause] = field(default_factory=list)
+    tables: list[Table] = field(default_factory=list)
 
 
 def _is_toc_line(text: str) -> bool:
@@ -101,10 +113,34 @@ def _extract_meta(path: Path, lines: list[Line]) -> DocMeta:
     return meta
 
 
+def _table_caption(lines: list[Line], page: int) -> tuple[str, str]:
+    """Find "Таблица N — title": the last caption on or up to 3 pages before the table."""
+    caption = ("", "")
+    for line in lines:
+        if line.page > page:
+            break
+        if line.page < page - 3:
+            continue
+        match = TABLE_CAPTION_RE.match(line.text.strip())
+        if match:
+            caption = (match.group(1).replace(" ", ""), match.group(2).strip())
+    return caption
+
+
 def parse_document(pdf_path: Path) -> ParsedDocument:
     raw_pages = extract_pdf(pdf_path)
     lines = pages_to_lines(clean_pages(raw_pages))
     meta = _extract_meta(pdf_path, lines)
+    tables = [
+        Table(
+            page=block.page,
+            index=block.index,
+            rows=block.rows,
+            number=(caption := _table_caption(lines, block.page))[0],
+            title=caption[1],
+        )
+        for block in extract_tables(pdf_path)
+    ]
 
     clauses: list[Clause] = []
     current: Clause | None = None
@@ -214,4 +250,4 @@ def parse_document(pdf_path: Path) -> ParsedDocument:
             current.text = _join(current.text, text)
 
     flush()
-    return ParsedDocument(meta=meta, clauses=clauses)
+    return ParsedDocument(meta=meta, clauses=clauses, tables=tables)

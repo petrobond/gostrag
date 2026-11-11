@@ -59,10 +59,13 @@ class QdrantStore:
             query_filter=query_filter,
             with_payload=True,
         )
-        return [
-            DenseHit(chunk_id=str(point.id), score=float(point.score), payload=point.payload or {})
-            for point in response.points
-        ]
+        hits: list[DenseHit] = []
+        for point in response.points:
+            payload = point.payload or {}
+            # Point id is a UUID; chunk lookups must use the corpus chunk_id from payload.
+            chunk_id = str(payload.get("chunk_id") or point.id)
+            hits.append(DenseHit(chunk_id=chunk_id, score=float(point.score), payload=payload))
+        return hits
 
     async def close(self) -> None:
         await self.client.close()

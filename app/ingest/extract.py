@@ -81,3 +81,59 @@ def extract_text_layout(pdf_path: Path) -> str:
         return "\n".join(page.get_text("text") for page in doc)
     finally:
         doc.close()
+
+
+@dataclass(slots=True)
+class TableBlock:
+    """A table detected on a page; rows are lists of flattened cell strings."""
+
+    page: int
+    index: int
+    rows: list[list[str]]
+
+
+def extract_tables(pdf_path: Path, pages_hint: set[int] | None = None) -> list[TableBlock]:
+    """Extract tables page by page: pdfplumber first, PyMuPDF fallback for missed pages."""
+    import pdfplumber
+
+    blocks: list[TableBlock] = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_no, page in enumerate(pdf.pages, start=1):
+            if pages_hint is not None and page_no not in pages_hint:
+                continue
+            for idx, table in enumerate(page.extract_tables() or [], start=1):
+                rows = [
+                    [(cell or "").replace("\n", " ").strip() for cell in row]
+                    for row in table
+                    if row and any((cell or "").strip() for cell in row)
+                ]
+                if len(rows) < 2:
+                    continue
+                blocks.append(TableBlock(page=page_no, index=idx, rows=rows))
+    covered = {block.page for block in blocks}
+    missing = (pages_hint - covered) if pages_hint is not None else None
+    if missing:
+        blocks.extend(_tables_fitz(pdf_path, missing))
+    return sorted(blocks, key=lambda block: (block.page, block.index))
+
+
+def _tables_fitz(pdf_path: Path, pages: set[int]) -> list[TableBlock]:
+    """Fallback table extraction via PyMuPDF for pages pdfplumber could not parse."""
+    doc = fitz.open(pdf_path)
+    blocks: list[TableBlock] = []
+    try:
+        for page_no in sorted(pages):
+            if page_no < 1 or page_no > doc.page_count:
+                continue
+            for idx, table in enumerate(doc[page_no - 1].find_tables().tables, start=1):
+                rows = [
+                    [(cell or "").replace("\n", " ").strip() for cell in row]
+                    for row in table.extract()
+                    if row and any((cell or "").strip() for cell in row)
+                ]
+                if len(rows) < 2:
+                    continue
+                blocks.append(TableBlock(page=page_no, index=idx, rows=rows))
+    finally:
+        doc.close()
+    return blocks
