@@ -1,0 +1,167 @@
+"""Gold-set evaluation with GigaChat as judge."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.config import get_settings  # noqa: E402
+from app.llm.chain import LLMChain  # noqa: E402
+from app.rag.service import AskService  # noqa: E402
+
+JUDGE_PROMPT = """Ты — строгий аудитор качества RAG-системы по ГОСТам.
+Оцени ответ системы по рубрике. Верни ТОЛЬКО JSON.
+
+Вопрос: {question}
+Эталонный ответ: {expected}
+Ожидался отказ: {expect_refusal}
+Ответ системы: {answer}
+Система отказалась: {refused}
+Цитаты системы: {citations}
+Фрагменты контекста: {context}
+
+Рубрика (каждая оценка от 0 до 1):
+- faithfulness: все ли утверждения ответа подтверждены контекстом;
+- relevancy: отвечает ли ответ на вопрос;
+- citation: корректны ли цитаты (существующие ГОСТ и пункт);
+- refusal: корректно ли поведение при отказе (1 — ожидаемо и корректно, 0 — нет).
+- verdict: pass | partial | fail.
+- comment: краткое обоснование (до 300 символов).
+
+JSON: {{"faithfulness":0.0,"relevancy":0.0,"citation":0.0,"refusal":0.0,"verdict":"pass","comment":""}}
+"""
+
+
+def _parse_json(text: str) -> dict:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            return json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+async def evaluate(
+    gold_path: Path,
+    corpus_dir: Path,
+    index_dir: Path,
+    qdrant_url: str,
+    limit: int | None,
+) -> dict:
+    settings = get_settings()
+    gold = yaml.safe_load(gold_path.read_text(encoding="utf-8"))
+    questions = gold["questions"][: limit or len(gold["questions"])]
+    service = AskService(settings, corpus_dir, index_dir, qdrant_url)
+    chain = LLMChain(settings)
+    results = []
+
+    try:
+        for item in questions:
+            try:
+                result = await service.ask(item["question"])
+            except Exception as exc:  # noqa: BLE001
+                results.append({"id": item["id"], "error": str(exc)})
+                continue
+            context = "\n".join(
+                f"{chunk.gost_number}, п. {chunk.clause}: {chunk.text[:600]}"
+                for chunk in result.chunks
+            )
+            citations = "; ".join(
+                f"{c.gost}, п. {c.clause}, с. {c.page} (valid={c.valid})"
+                for c in result.answer.citations
+            )
+            prompt = JUDGE_PROMPT.format(
+                question=item["question"],
+                expected=item["expected_answer"],
+                expect_refusal=item["expect_refusal"],
+                answer=result.answer.answer[:3000],
+                refused=result.answer.refused,
+                citations=citations or "нет",
+                context=context[:6000],
+            )
+            judge_raw = await chain.chat(
+                [{"role": "user", "content": prompt}],
+                complexity="complex",
+                max_tokens=600,
+            )
+            score = _parse_json(judge_raw.content)
+            results.append(
+                {
+                    "id": item["id"],
+                    "category": item["category"],
+                    "question": item["question"],
+                    "answer": result.answer.answer,
+                    "refused": result.answer.refused,
+                    "citations": [
+                        {
+                            "gost": c.gost,
+                            "clause": c.clause,
+                            "page": c.page,
+                            "valid": c.valid,
+                        }
+                        for c in result.answer.citations
+                    ],
+                    "model": result.answer.model,
+                    "latency_ms": result.latency_ms,
+                    "judge": score,
+                    "raw_judge": judge_raw.content,
+                }
+            )
+            print(f"{item['id']} -> {score.get('verdict', '?')}", flush=True)
+    finally:
+        await service.close()
+
+    scored = [r for r in results if r.get("judge")]
+    total = len(scored) or 1
+    report = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "corpus_version": gold.get("corpus_version"),
+        "questions_total": len(questions),
+        "questions_scored": len(scored),
+        "pass_rate": sum(1 for r in scored if r["judge"].get("verdict") == "pass") / total,
+        "metrics": {
+            key: round(sum(float(r["judge"].get(key, 0) or 0) for r in scored) / total, 4)
+            for key in ("faithfulness", "relevancy", "citation", "refusal")
+        },
+        "results": results,
+    }
+    return report
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gold", default="eval/gold_set.yaml")
+    parser.add_argument("--corpus", default="data/corpus")
+    parser.add_argument("--index", default="data/index")
+    parser.add_argument("--qdrant-url", default="http://localhost:6333")
+    parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--out", default="eval/report.json")
+    args = parser.parse_args()
+
+    report = asyncio.run(
+        evaluate(
+            Path(args.gold),
+            Path(args.corpus),
+            Path(args.index),
+            args.qdrant_url,
+            args.limit or None,
+        )
+    )
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(report["metrics"], ensure_ascii=False, indent=2))
+    print("pass_rate:", report["pass_rate"])
+
+
+if __name__ == "__main__":
+    main()
