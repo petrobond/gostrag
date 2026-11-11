@@ -1,0 +1,46 @@
+# --- secrets ---
+secrets/
+.env
+.env.*
+!.env.example
+
+# --- data: source PDFs and generated corpus are not versioned ---
+data/source/
+data/corpus/
+data/index/
+data/tmp/
+*.pdf
+!data/prices/*
+
+# --- generated artefacts ---
+reports/
+artifacts/
+logs/
+*.log
+
+# --- python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- local services ---
+qdrant_storage/
+postgres_data/
+redis_data/
+caddy_data/
+caddy_config/
+
+# --- os / ide ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
