@@ -8,6 +8,11 @@ from app.llm.chain import LLMChain, classify
 from app.rag.prompts import SYSTEM_PROMPT, USER_TEMPLATE, format_documents
 
 JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
+WS_RE = re.compile(r"\s+")
+
+
+def _norm(text: str) -> str:
+    return WS_RE.sub(" ", text.lower()).strip()
 
 
 @dataclass(slots=True)
@@ -17,6 +22,8 @@ class Citation:
     page: int
     quote: str = ""
     valid: bool = False
+    page_valid: bool = False
+    quote_valid: bool = False
 
 
 @dataclass(slots=True)
@@ -67,7 +74,7 @@ class Generator:
         result = await self.chain.chat(messages, complexity=classify(question))
         data = _parse_json(result.content)
 
-        allowed = {(c["gost_number"], c["clause"]) for c in chunks}
+        allowed = {(c["gost_number"], c["clause"]): c for c in chunks}
         citations: list[Citation] = []
         for item in data.get("citations", []) or []:
             citation = Citation(
@@ -76,7 +83,14 @@ class Generator:
                 page=int(item.get("page", 0) or 0),
                 quote=str(item.get("quote", "")),
             )
-            citation.valid = (citation.gost, citation.clause) in allowed
+            chunk = allowed.get((citation.gost, citation.clause))
+            citation.valid = chunk is not None
+            if chunk is not None:
+                citation.page_valid = citation.page in (0, int(chunk.get("page", 0)))
+                if citation.quote:
+                    citation.quote_valid = _norm(citation.quote) in _norm(chunk["text"])
+                if not citation.page_valid:
+                    citation.valid = False
             citations.append(citation)
 
         return Answer(

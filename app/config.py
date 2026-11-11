@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     gigachat_model_ultra: str = Field(default="GigaChat-3-Ultra", alias="GIGACHAT_MODEL_ULTRA")
     gigachat_model_max: str = Field(default="GigaChat-2-Max", alias="GIGACHAT_MODEL_MAX")
     gigachat_model_pro: str = Field(default="GigaChat-2-Pro", alias="GIGACHAT_MODEL_PRO")
-    gigachat_model_lite: str = Field(default="GigaChat-2-Lite", alias="GIGACHAT_MODEL_LITE")
+    gigachat_model_lite: str = Field(default="GigaChat-2", alias="GIGACHAT_MODEL_LITE")
     gigachat_embedding_model: str = Field(
         default="GigaEmbeddings-3B-2025-09", alias="GIGACHAT_EMBEDDING_MODEL"
     )

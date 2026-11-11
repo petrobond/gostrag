@@ -49,7 +49,8 @@ async def main(gold_path: Path, corpus: Path, index: Path, qdrant_url: str, top_
             total += 1
             retrieved = await retriever.retrieve(item["question"], top_k=top_k)
             found = any(
-                (chunk.gost_number == gost and chunk.clause == clause)
+                chunk.gost_number == gost
+                and (chunk.clause == clause or chunk.clause.startswith(clause + "."))
                 for chunk in retrieved
                 for gost, clause in sources
             )

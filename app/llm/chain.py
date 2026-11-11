@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import httpx
+import structlog
 
 from app.config import Settings
 from app.llm.gigachat import ChatResult, GigaChatClient, GigaChatError
+
+log = structlog.get_logger()
 
 
 @dataclass(slots=True)
@@ -66,10 +69,11 @@ class LLMChain:
         max_model = self.settings.gigachat_model_max
         pro = self.settings.gigachat_model_pro
         lite = self.settings.gigachat_model_lite
+        # Ultra is always first: quality matters more than token savings.
         chains = {
             "complex": [ultra, max_model, pro, lite],
-            "medium": [ultra, max_model, pro, lite],
-            "simple": [lite, pro, max_model, ultra],
+            "medium": [ultra, pro, max_model, lite],
+            "simple": [ultra, pro, max_model, lite],
         }
         models = [(name, "gigachat") for name in chains.get(complexity, chains["medium"])]
         models.append((self.settings.deepseek_model, "deepseek"))
@@ -96,6 +100,13 @@ class LLMChain:
                     tokens_out=result.tokens_out,
                 )
             except GigaChatError as exc:
+                log.warning(
+                    "llm_error",
+                    model=model,
+                    provider=provider,
+                    status=exc.status,
+                    message=exc.message[:200],
+                )
                 if exc.status in (402, 413, 429, 500):
                     last_error = exc
                     continue
