@@ -102,7 +102,7 @@ async def evaluate(
                 answer=result.answer.answer[:3000],
                 refused=result.answer.refused,
                 citations=citations or "нет",
-                context=context[:12000],
+                context=context[:18000],
             )
             judge_raw = await chain.chat(
                 [{"role": "user", "content": prompt}],

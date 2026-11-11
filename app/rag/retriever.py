@@ -32,6 +32,7 @@ class RetrievedChunk:
     page: int
     score: float
     doc_id: str
+    clause_title: str = ""
 
 
 class Retriever:
@@ -96,7 +97,7 @@ class Retriever:
             result.append(self._to_chunk(payload, score))
             seen.add(chunk_id)
         if result and question_type == "enumeration":
-            self._expand_enumeration(query, result, seen, exact_gost)
+            self._expand_enumeration(query, result, seen, exact_gost, dense_hits)
         elif result and any(marker in query.lower() for marker in LIST_MARKERS):
             top = result[0]
             for row in self.chunks.section_chunks(top.doc_id, top.section):
@@ -125,8 +126,11 @@ class Retriever:
                     break
         limit = max(top_k, len(exact))
         if question_type == "enumeration":
-            limit = max(limit, 16)
+            limit = max(limit, self.ENUMERATION_RESULT_LIMIT)
         return result[:limit]
+
+    ENUMERATION_GROUP_LIMIT = 16
+    ENUMERATION_RESULT_LIMIT = 22
 
     def _expand_enumeration(
         self,
@@ -134,42 +138,34 @@ class Retriever:
         result: list[RetrievedChunk],
         seen: set[str],
         exact_gost: str | None,
+        dense_hits: list | None = None,
     ) -> None:
-        """Pull the whole clause group that enumerates items (6.1 ... 6.6).
+        """Put the whole clause group that enumerates items (4.1 ... 4.7) into context.
 
-        The group is chosen by BM25 evidence inside the document, so a question about
-        "15 characteristics" lands on group 6 even when a single member was ranked higher.
+        The anchor is chosen by semantic similarity of the group (dense) with a BM25
+        tie-break, so a question without a GOST number lands on the document the
+        question is about, and the whole group is added before any secondary hits.
         """
-        evidence: dict[str, int] = {}
-        doc_for_head: dict[str, str] = {}
-        for chunk in result:
-            head = chunk.clause.split(".")[0]
-            if head.isdigit():
-                evidence[head] = evidence.get(head, 0) + 1
-                doc_for_head.setdefault(head, chunk.doc_id)
         bm25_hits = (
             self._bm25_in_doc(query, exact_gost, top_k=100)
             if exact_gost
-            else self.bm25.search(query, top_k=60)
+            else self.bm25.search(query, top_k=80)
         )
-        for hit in bm25_hits:
-            payload = self.chunks.get(hit.chunk_id)
-            if not payload:
-                continue
-            head = payload["clause"].split(".")[0]
-            if head.isdigit():
-                evidence[head] = evidence.get(head, 0) + 1
-                doc_for_head.setdefault(head, payload["doc_id"])
-        if evidence:
-            head = max(evidence, key=lambda key: evidence[key])
-            anchor = doc_for_head[head]
-            for row in self.chunks.clause_siblings(anchor, f"{head}.0", limit=14):
+        anchors = self._enumeration_anchors(bm25_hits, result, exact_gost, dense_hits)
+        per_group = self.ENUMERATION_GROUP_LIMIT if len(anchors) <= 1 else 10
+        for doc_id, head in anchors:
+            group = self._group_order(
+                self.chunks.clause_siblings(doc_id, f"{head}.0", limit=40)
+            )
+            added = 0
+            for row in group:
+                if added >= per_group:
+                    break
                 if row["chunk_id"] in seen:
                     continue
-                result.append(self._to_chunk(row, 0.55))
+                result.append(self._to_chunk(row, 0.6))
                 seen.add(row["chunk_id"])
-                if len(result) >= 14:
-                    break
+                added += 1
         ordered_hits = sorted(
             bm25_hits,
             key=lambda hit: (
@@ -178,7 +174,7 @@ class Retriever:
                 else 1
             ),
         )
-        for hit in ordered_hits[:12]:
+        for hit in ordered_hits:
             if hit.chunk_id in seen:
                 continue
             payload = self.chunks.get(hit.chunk_id)
@@ -186,8 +182,66 @@ class Retriever:
                 continue
             result.append(self._to_chunk(payload, 0.4))
             seen.add(hit.chunk_id)
-            if len(result) >= 16:
+            if len(result) >= self.ENUMERATION_RESULT_LIMIT:
                 break
+
+    @staticmethod
+    def _group_order(rows: list[dict]) -> list[dict]:
+        """Shallow headings first: 8.3.3 is more useful than 8.2.1.1 for "какие слои"."""
+        return sorted(rows, key=lambda row: row["clause"].count("."))
+
+    def _enumeration_anchors(
+        self,
+        bm25_hits: list,
+        result: list[RetrievedChunk],
+        exact_gost: str | None,
+        dense_hits: list | None = None,
+        limit: int = 2,
+    ) -> list[tuple[str, str]]:
+        """Rank (doc_id, section) pairs by dense similarity plus BM25 support."""
+        bm25_scores: dict[tuple[str, str], float] = {}
+        dense_scores: dict[tuple[str, str], float] = {}
+        for hit in bm25_hits:
+            payload = self.chunks.get(hit.chunk_id)
+            if not payload:
+                continue
+            if exact_gost and payload["gost_number"] != exact_gost:
+                continue
+            head = payload["clause"].split(".")[0]
+            if not head.isdigit():
+                continue
+            key = (payload["doc_id"], head)
+            bm25_scores[key] = bm25_scores.get(key, 0.0) + float(
+                getattr(hit, "score", 0.0) or 0.0
+            )
+        for hit in dense_hits or []:
+            payload = self.chunks.get(hit.chunk_id)
+            if not payload:
+                continue
+            if exact_gost and payload["gost_number"] != exact_gost:
+                continue
+            head = payload["clause"].split(".")[0]
+            if not head.isdigit():
+                continue
+            key = (payload["doc_id"], head)
+            dense_scores[key] = max(dense_scores.get(key, 0.0), float(hit.score or 0.0))
+        for chunk in result:
+            head = chunk.clause.split(".")[0]
+            if head.isdigit():
+                key = (chunk.doc_id, head)
+                dense_scores[key] = max(dense_scores.get(key, 0.0), float(chunk.score or 0.0))
+        keys = set(bm25_scores) | set(dense_scores)
+        if not keys:
+            return []
+        combined = {
+            key: dense_scores.get(key, 0.0) + 0.0003 * bm25_scores.get(key, 0.0)
+            for key in keys
+        }
+        ranked = sorted(combined.items(), key=lambda item: item[1], reverse=True)
+        anchors = [ranked[0][0]]
+        if not exact_gost and len(ranked) > 1 and ranked[1][1] >= 0.6 * ranked[0][1]:
+            anchors.append(ranked[1][0])
+        return anchors[:limit]
 
 
     async def retrieve_multi(
@@ -292,4 +346,5 @@ class Retriever:
             page=int(payload.get("page", 0)),
             score=score,
             doc_id=payload["doc_id"],
+            clause_title=payload.get("clause_title", ""),
         )

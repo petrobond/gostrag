@@ -78,6 +78,8 @@ class AskService:
         ):
             answer.answer = f"{answer.answer.rstrip()} {GENERAL_NOTE}"
             answer.general_knowledge = True
+        if question_type == "enumeration" and "характеристик" in question.lower():
+            answer.answer = self._append_enumeration_titles(answer.answer, chunks)
         latency_ms = int((time.perf_counter() - started) * 1000)
         return AskResult(answer=answer, chunks=chunks, latency_ms=latency_ms)
 
@@ -131,10 +133,51 @@ class AskService:
                 page=int(row.get("page", 0) or 0),
                 score=1.0,
                 doc_id=row["doc_id"],
+                clause_title=row.get("clause_title", ""),
             )
             for row in rows
         ]
         return answer, chunks
+
+    @staticmethod
+    def _append_enumeration_titles(answer: str, chunks: list[RetrievedChunk]) -> str:
+        """Guarantee a complete list of clause headings for "какие характеристики" questions."""
+        if "полный перечень" in answer.lower():
+            return answer
+        heads: dict[str, int] = {}
+        for chunk in chunks:
+            if chunk.clause == "meta" or chunk.clause.startswith("Таблица"):
+                continue
+            head = chunk.clause.split(".")[0]
+            if head.isdigit() and "." in chunk.clause:
+                heads[head] = heads.get(head, 0) + 1
+        if not heads:
+            return answer
+        main_head = max(heads, key=heads.get)
+        items: list[str] = []
+        seen: set[str] = set()
+        for chunk in chunks:
+            if not chunk.clause.startswith(main_head + "."):
+                continue
+            title = (chunk.clause_title or "").strip()
+            if not title:
+                continue
+            key = title.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(f"{chunk.clause} — {title}")
+        if len(items) < 3:
+            return answer
+        lower = answer.lower()
+        missing = [
+            item
+            for item in items
+            if item.split("—", 1)[1].strip().lower()[:15] not in lower
+        ]
+        if not missing:
+            return answer
+        return f"{answer.rstrip()}\n\nПолный перечень пунктов: {'; '.join(items[:12])}."
 
     async def close(self) -> None:
         await self.qdrant.close()
