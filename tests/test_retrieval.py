@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -120,6 +121,38 @@ def test_group_order_puts_shallow_clauses_first():
     ]
     ordered = Retriever._group_order(rows)
     assert [row["clause"] for row in ordered] == ["8.1", "8.3.1", "8.3.3", "8.2.1.1"]
+
+
+class FailingEmbedder:
+    dim = 1024
+
+    async def aembed_query(self, text: str):
+        raise RuntimeError("Cloud.ru is unavailable")
+
+    async def aembed_documents(self, texts: list[str]):
+        raise RuntimeError("Cloud.ru is unavailable")
+
+
+class FailingQdrant:
+    async def search(self, *args, **kwargs):
+        raise AssertionError("dense search must be skipped")
+
+
+class FakeBm25:
+    def search(self, query: str, top_k: int = 20):
+        return [SimpleNamespace(chunk_id="docA#4.1", score=1.0)]
+
+
+def test_retrieve_falls_back_to_bm25(tmp_path):
+    retriever = Retriever(
+        settings=None,  # type: ignore[arg-type]
+        embedder=FailingEmbedder(),  # type: ignore[arg-type]
+        bm25=FakeBm25(),  # type: ignore[arg-type]
+        qdrant=FailingQdrant(),  # type: ignore[arg-type]
+        chunks=make_chunks(tmp_path),
+    )
+    got = asyncio.run(retriever.retrieve("Что говорится о качестве данных?", top_k=3))
+    assert any(chunk.chunk_id == "docA#4.1" for chunk in got)
 
 
 def test_to_chunk_carries_source_file():

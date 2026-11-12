@@ -69,6 +69,41 @@ def test_clause_siblings(tmp_path):
     assert [row["clause"] for row in rows] == ["8.3.4", "8.3.5"]
 
 
+def test_duplicate_chunk_id_is_merged(tmp_path):
+    rows = [
+        {
+            "chunk_id": "doc#8.2",
+            "doc_id": "doc",
+            "gost_number": "ГОСТ Р 72663—2026",
+            "clause": "8.2",
+            "section": "8",
+            "section_title": "Показатели качества данных",
+            "clause_title": "Показатели качества прецизионности",
+            "page": 17,
+            "text": "Первый фрагмент таблицы.",
+        },
+        {
+            "chunk_id": "doc#8.2",
+            "doc_id": "doc",
+            "gost_number": "ГОСТ Р 72663—2026",
+            "clause": "8.2",
+            "section": "8",
+            "section_title": "Показатели качества данных",
+            "clause_title": "Показатели качества прецизионности",
+            "page": 17,
+            "text": "Acc-I-1 Acc-I-2 Acc-I-7",
+        },
+    ]
+    with (tmp_path / "chunks.jsonl").open("w", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    store = ChunkStore(tmp_path)
+    merged = store.get("doc#8.2")
+    assert merged is not None
+    assert "Первый фрагмент" in merged["text"]
+    assert "Acc-I-7" in merged["text"]
+
+
 def test_find_meta_and_table_chunks(tmp_path):
     rows = [
         {

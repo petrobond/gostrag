@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+import structlog
+
 from app.config import Settings
 from app.embeddings.base import Embedder
 from app.rag.chunk_store import ChunkStore
@@ -18,7 +20,9 @@ from app.storage.qdrant import QdrantStore
 
 GOST_RE = re.compile(r"(ГОСТ\s*Р|ПНСТ)\s*(\d+(?:\.\d+)?)\s*[—–-]\s*(\d{4})", re.IGNORECASE)
 CLAUSE_RE = re.compile(r"(?:п\.?|пункт)\s*(\d+(?:\.\d+)+)", re.IGNORECASE)
+QUANT_RE = re.compile(r"\b\d+\s+характеристик", re.IGNORECASE)
 LIST_MARKERS = ("какие", "перечисли", "этапы", "слои", "виды", "характеристики", "состав")
+log = structlog.get_logger()
 
 
 @dataclass(slots=True)
@@ -69,8 +73,12 @@ class Retriever:
             if appendix:
                 exact = self.chunks.find_appendix(exact_gost, appendix)
 
-        vector = await self.embedder.aembed_query(query)
-        dense_hits = await self.qdrant.search(vector, limit=20, gost_number=exact_gost)
+        dense_hits = []
+        try:
+            vector = await self.embedder.aembed_query(query)
+            dense_hits = await self.qdrant.search(vector, limit=20, gost_number=exact_gost)
+        except Exception as exc:  # noqa: BLE001 - degrade to BM25 when embedding/Qdrant fails
+            log.warning("dense_search_unavailable", error=str(exc)[:200])
         bm25_hits = self.bm25.search(query, top_k=40)
         if exact_gost:
             filtered = []
@@ -151,21 +159,51 @@ class Retriever:
             if exact_gost
             else self.bm25.search(query, top_k=80)
         )
-        anchors = self._enumeration_anchors(bm25_hits, result, exact_gost, dense_hits)
+        title_anchor = (
+            self.chunks.find_section_by_title(query, exact_gost) if exact_gost else None
+        )
+        if title_anchor:
+            anchors = [title_anchor]
+        else:
+            anchors = self._enumeration_anchors(bm25_hits, result, exact_gost, dense_hits)
         per_group = self.ENUMERATION_GROUP_LIMIT if len(anchors) <= 1 else 10
+        front: list[RetrievedChunk] = []
+        front_ids: set[str] = set()
+        existing = {chunk.chunk_id: chunk for chunk in result}
         for doc_id, head in anchors:
             group = self._group_order(
                 self.chunks.clause_siblings(doc_id, f"{head}.0", limit=40)
             )
+            if title_anchor and "этап" in query.lower():
+                group = [
+                    row
+                    for row in group
+                    if row["clause"] != head
+                    and "общие положения" not in row.get("clause_title", "").lower()
+                    and "применен" not in row.get("clause_title", "").lower()
+                ]
             added = 0
             for row in group:
                 if added >= per_group:
                     break
-                if row["chunk_id"] in seen:
+                chunk_id = row["chunk_id"]
+                if chunk_id in seen:
+                    if title_anchor and chunk_id not in front_ids:
+                        chunk = existing.get(chunk_id)
+                        if chunk is not None:
+                            front.append(chunk)
+                            front_ids.add(chunk_id)
                     continue
-                result.append(self._to_chunk(row, 0.6))
-                seen.add(row["chunk_id"])
+                chunk = self._to_chunk(row, 0.7 if title_anchor else 0.6)
+                if title_anchor:
+                    front.append(chunk)
+                    front_ids.add(chunk_id)
+                else:
+                    result.append(chunk)
+                seen.add(chunk_id)
                 added += 1
+        if front:
+            result[:] = front + [chunk for chunk in result if chunk.chunk_id not in front_ids]
         ordered_hits = sorted(
             bm25_hits,
             key=lambda hit: (
@@ -263,6 +301,20 @@ class Retriever:
                     continue
                 merged.append(self._to_chunk(row, 0.9))
                 seen.add(row["chunk_id"])
+            for row in self.chunks.by_gost.get(gost, []):
+                if row["chunk_id"] in seen or not QUANT_RE.search(row["text"]):
+                    continue
+                merged.append(self._to_chunk(row, 0.9))
+                seen.add(row["chunk_id"])
+                break
+            for doc_id, section in self.chunks.find_sections_by_title(
+                query, gost, min_matched=2, limit=1
+            ):
+                for row in self.chunks.section_chunks(doc_id, section)[:3]:
+                    if row["chunk_id"] in seen:
+                        continue
+                    merged.append(self._to_chunk(row, 0.85))
+                    seen.add(row["chunk_id"])
             for chunk in await self.retrieve(query, top_k=top_k, gost_number=gost):
                 if chunk.chunk_id in seen:
                     continue

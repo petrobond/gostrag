@@ -89,15 +89,22 @@ def _parse_json(text: str) -> dict:
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```[a-zA-Z]*\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        match = JSON_RE.search(cleaned)
-        if match:
+    candidates = [cleaned]
+    match = JSON_RE.search(cleaned)
+    if match:
+        candidates.append(match.group(0))
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, str):
             try:
-                return json.loads(match.group(0))
+                data = json.loads(data)
             except json.JSONDecodeError:
-                pass
+                continue
+        if isinstance(data, dict):
+            return data
     return {}
 
 

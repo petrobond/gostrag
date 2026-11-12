@@ -46,6 +46,17 @@ class Settings(BaseSettings):
     cloudru_timeout_sec: int = Field(default=60, alias="CLOUDRU_TIMEOUT_SEC")
     cloudru_max_retries: int = Field(default=3, alias="CLOUDRU_MAX_RETRIES")
 
+    # Reranker (Cloud.ru /score, BAAI/bge-reranker-v2-m3)
+    rerank_enabled: bool = Field(default=False, alias="RERANK_ENABLED")
+    cloudru_rerank_url: str = Field(
+        default="https://foundation-models.api.cloud.ru/score", alias="CLOUDRU_RERANK_URL"
+    )
+    cloudru_rerank_model: str = Field(
+        default="BAAI/bge-reranker-v2-m3", alias="CLOUDRU_RERANK_MODEL"
+    )
+    cloudru_rerank_timeout_sec: int = Field(default=60, alias="CLOUDRU_RERANK_TIMEOUT_SEC")
+    rerank_top_n: int = Field(default=20, alias="RERANK_TOP_N")
+
     # Yandex AI Studio fallback
     yc_folder_id: str = Field(default="", alias="YC_FOLDER_ID")
     yc_api_key: str = Field(default="", alias="YC_API_KEY")

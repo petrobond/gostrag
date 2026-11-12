@@ -1,0 +1,34 @@
+import os
+import httpx
+
+from openai import OpenAI
+
+api_key = os.environ["API_KEY"]
+url = "https://foundation-models.api.cloud.ru"
+
+documents = [
+    "Пишите оптимизированный код.",
+    "Пишите читабельный код.",
+    "Зачем что-то делать? Ваш код и так хорош!",
+]
+
+client = OpenAI(
+    api_key=api_key,
+    base_url=url
+)
+
+response = client.post(
+    path="/score",
+    cast_to=httpx.Response,
+    body={
+        "model": "BAAI/bge-reranker-v2-m3",
+        "encoding_format": "float",
+        "text_1": "Как написать хороший код?",
+        "text_2": documents,
+    }
+)
+
+for result in response.json()["data"]:
+    idx = result["index"]
+    score = result["score"]
+    print(f"Document: '{documents[idx]}', Score: {score:.4f}")

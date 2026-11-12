@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -18,7 +19,38 @@ STOP_WORDS = {
     "в",
     "и",
     "на",
+    "какие",
+    "какой",
+    "каким",
+    "этапы",
+    "этап",
+    "включает",
+    "включать",
+    "перечисли",
+    "приведены",
+    "приведен",
+    "назови",
+    "назовите",
+    "опиши",
+    "опишите",
+    "сколько",
+    "чем",
+    "отличаются",
+    "разница",
+    "для",
+    "при",
+    "как",
+    "или",
+    "их",
+    "его",
+    "ее",
+    "это",
+    "эти",
 }
+
+
+def _hash_text(text: str) -> str:
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _stem(word: str) -> str:
@@ -44,18 +76,32 @@ class ChunkStore:
         self.by_section: dict[tuple[str, str], list[dict]] = {}
         self._title_tokens: dict[str, set[str]] = {}
         path = corpus_dir / "chunks.jsonl"
+        merged: dict[str, dict] = {}
+        order: list[str] = []
         with path.open(encoding="utf-8") as fh:
             for line in fh:
                 row = json.loads(line)
-                self.by_id[row["chunk_id"]] = row
-                self.by_key[(row["gost_number"], row["clause"])] = row
-                self.by_gost.setdefault(row["gost_number"], []).append(row)
-                self.by_doc.setdefault(row["doc_id"], []).append(row)
-                self.by_section.setdefault((row["doc_id"], row.get("section", "")), []).append(row)
-                title = row.get("clause_title", "") or row["text"][:120]
-                self._title_tokens[row["chunk_id"]] = {
-                    _stem(token) for token in TOKEN_RE.findall(title.lower())
-                }
+                chunk_id = row["chunk_id"]
+                if chunk_id in merged:
+                    # Duplicate clause chunks (same chunk_id, different parser output)
+                    # must stay in one payload; otherwise the tail with identifiers is lost.
+                    current = merged[chunk_id]
+                    current["text"] = f"{current['text']}\n{row['text']}"
+                    current["text_hash"] = _hash_text(current["text"])
+                else:
+                    merged[chunk_id] = row
+                    order.append(chunk_id)
+        for chunk_id in order:
+            row = merged[chunk_id]
+            self.by_id[row["chunk_id"]] = row
+            self.by_key[(row["gost_number"], row["clause"])] = row
+            self.by_gost.setdefault(row["gost_number"], []).append(row)
+            self.by_doc.setdefault(row["doc_id"], []).append(row)
+            self.by_section.setdefault((row["doc_id"], row.get("section", "")), []).append(row)
+            title = row.get("clause_title", "") or row["text"][:120]
+            self._title_tokens[row["chunk_id"]] = {
+                _stem(token) for token in TOKEN_RE.findall(title.lower())
+            }
 
 
     def get(self, chunk_id: str) -> dict | None:
@@ -100,6 +146,109 @@ class ChunkStore:
                 scored.append((score + prefix_bonus, -len(row["text"]), row))
         scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
         return [row for _, _, row in scored[:limit]]
+
+    def find_section_by_title(
+        self, question: str, gost_number: str | None = None
+    ) -> tuple[str, str] | None:
+        """Map a question phrase to a section title ("процесс управления качеством")."""
+        q_tokens = {
+            _stem(token)
+            for token in TOKEN_RE.findall(question.lower())
+            if token not in STOP_WORDS and len(token) >= 3
+        }
+        if len(q_tokens) < 3:
+            return None
+        best: tuple[float, int, int, int, str, str] | None = None
+        seen: set[tuple[str, str]] = set()
+        for doc_id, rows in self.by_doc.items():
+            section_counts: dict[str, int] = {}
+            for row in rows:
+                if row.get("section"):
+                    section_counts[row["section"]] = section_counts.get(row["section"], 0) + 1
+            for row in rows:
+                if gost_number and row["gost_number"] != gost_number:
+                    continue
+                section = row.get("section", "")
+                title = row.get("section_title", "")
+                key = (doc_id, section)
+                if not section or not title or key in seen:
+                    continue
+                seen.add(key)
+                children = section_counts.get(section, 1)
+                if children < 2:
+                    continue
+                title_tokens = {
+                    _stem(token)
+                    for token in TOKEN_RE.findall(title.lower())
+                    if token not in STOP_WORDS and len(token) >= 3
+                }
+                if len(title_tokens) < 3:
+                    continue
+                matched = len(q_tokens & title_tokens)
+                if matched < 3:
+                    continue
+                extra = len(title_tokens - q_tokens)
+                score = matched - 0.5 * extra
+                # Prefer the shortest (most general) title: "Структура процесса..."
+                # over "Процесс ... для аналитики" / "... для машинного обучения".
+                if best is None or (score, -len(title), children, -extra) > (
+                    best[0],
+                    best[1],
+                    best[2],
+                    best[3],
+                ):
+                    best = (score, -len(title), children, extra, doc_id, section)
+        if best is None or best[0] < 2.0:
+            return None
+        return best[4], best[5].split(".")[0]
+
+    def find_sections_by_title(
+        self,
+        question: str,
+        gost_number: str | None = None,
+        min_matched: int = 2,
+        limit: int = 1,
+    ) -> list[tuple[str, str]]:
+        """Return up to `limit` sections whose title overlaps the question."""
+        q_tokens = {
+            _stem(token)
+            for token in TOKEN_RE.findall(question.lower())
+            if token not in STOP_WORDS and len(token) >= 3
+        }
+        if len(q_tokens) < min_matched:
+            return []
+        ranked: list[tuple[float, int, int, str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for doc_id, rows in self.by_doc.items():
+            section_counts: dict[str, int] = {}
+            for row in rows:
+                if row.get("section"):
+                    section_counts[row["section"]] = section_counts.get(row["section"], 0) + 1
+            for row in rows:
+                if gost_number and row["gost_number"] != gost_number:
+                    continue
+                section = row.get("section", "")
+                title = row.get("section_title", "")
+                key = (doc_id, section)
+                if not section or not title or key in seen:
+                    continue
+                seen.add(key)
+                children = section_counts.get(section, 1)
+                if children < 2:
+                    continue
+                title_tokens = {
+                    _stem(token)
+                    for token in TOKEN_RE.findall(title.lower())
+                    if token not in STOP_WORDS and len(token) >= 3
+                }
+                matched = len(q_tokens & title_tokens)
+                if matched < min_matched:
+                    continue
+                extra = len(title_tokens - q_tokens)
+                score = matched - 0.5 * extra
+                ranked.append((score, -len(title), children, doc_id, section))
+        ranked.sort(reverse=True)
+        return [(doc_id, section) for _, _, _, doc_id, section in ranked[:limit]]
 
     def find_appendix(self, gost_number: str, appendix: str) -> list[dict]:
         suffix = appendix.lower()

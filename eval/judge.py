@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,7 +62,17 @@ def _parse_json(text: str) -> dict:
         try:
             return json.loads(text[start : end + 1])
         except json.JSONDecodeError:
-            return {}
+            pass
+    # Recover malformed judge output like {"verdict":"pass":""}.
+    verdict = re.search(r'"verdict"\s*:\s*"(pass|partial|fail)"', text)
+    if verdict:
+        score: dict = {"verdict": verdict.group(1)}
+        for key in METRIC_KEYS:
+            match = re.search(rf'"{key}"\s*:\s*(null|[0-9.]+)', text)
+            if match:
+                value = match.group(1)
+                score[key] = None if value == "null" else float(value)
+        return score
     return {}
 
 
@@ -108,6 +119,7 @@ async def evaluate(
                 [{"role": "user", "content": prompt}],
                 complexity="complex",
                 max_tokens=600,
+                temperature=0.0,
             )
             score = _parse_json(judge_raw.content)
             if "verdict" not in score:
@@ -116,6 +128,7 @@ async def evaluate(
                     [{"role": "user", "content": prompt}],
                     complexity="complex",
                     max_tokens=600,
+                    temperature=0.0,
                 )
                 score = _parse_json(judge_raw.content)
             if "verdict" not in score and score:
@@ -155,6 +168,17 @@ async def evaluate(
 
     scored = [r for r in results if r.get("judge")]
     total = len(scored) or 1
+    for row in scored:
+        if row.get("refused"):
+            # Citation is not applicable to a correct refusal; do not let it drag the metric.
+            row["judge"]["citation"] = None
+    non_refused = [row for row in scored if not row.get("refused")]
+    cited = [row for row in non_refused if row.get("citations")]
+    citation_recall = round(len(cited) / len(non_refused), 4) if non_refused else 0.0
+    citations_total = sum(len(row.get("citations", [])) for row in scored)
+    citations_valid = sum(
+        1 for row in scored for citation in row.get("citations", []) if citation.get("valid")
+    )
     by_category: dict[str, dict] = {}
     for row in scored:
         category = row.get("category", "unknown")
@@ -185,6 +209,9 @@ async def evaluate(
             for key in METRIC_KEYS
         },
         "metric_counts": metric_counts,
+        "citation_recall": citation_recall,
+        "citation_valid": citations_valid,
+        "citation_total": citations_total,
         "by_category": by_category,
         "results": results,
     }

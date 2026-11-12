@@ -97,6 +97,7 @@ async def run_audit(
             [{"role": "user", "content": prompt}],
             complexity="complex",
             max_tokens=1200,
+            temperature=0.0,
         )
         scored = {item.get("requirement_id"): item for item in parse_json_array(result.content)}
         for item in batch:

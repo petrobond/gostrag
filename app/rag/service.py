@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -80,6 +81,10 @@ class AskService:
             answer.general_knowledge = True
         if question_type == "enumeration" and "характеристик" in question.lower():
             answer.answer = self._append_enumeration_titles(answer.answer, chunks)
+        if question_type in ("enumeration", "table") and "показател" in question.lower():
+            answer.answer = self._append_enumeration_ids(answer.answer, chunks)
+        if not answer.refused and not answer.citations:
+            self._attach_fallback_citation(answer, chunks)
         latency_ms = int((time.perf_counter() - started) * 1000)
         return AskResult(answer=answer, chunks=chunks, latency_ms=latency_ms)
 
@@ -139,6 +144,54 @@ class AskService:
             for row in rows
         ]
         return answer, chunks
+
+    @staticmethod
+    def _append_enumeration_ids(answer: str, chunks: list[RetrievedChunk]) -> str:
+        """Extend identifier lists only within families already present in the answer."""
+        families = {
+            match.group(1)
+            for match in re.finditer(r"\b([A-Za-z]{2,}-[A-Za-z0-9]+)-\d+\b", answer)
+        }
+        if not families:
+            return answer
+        lower = answer.lower()
+        additions: list[str] = []
+        for family in sorted(families):
+            pattern = re.compile(rf"\b{re.escape(family)}-\d+\b")
+            ids: list[str] = []
+            for chunk in chunks:
+                for match in pattern.findall(chunk.text):
+                    if match not in ids:
+                        ids.append(match)
+            if len(ids) < 3:
+                continue
+            if any(item.lower() not in lower for item in ids):
+                additions.append(f"{family}: {', '.join(ids)}")
+        if not additions:
+            return answer
+        return f"{answer.rstrip()}\n\nПолный перечень показателей: {'; '.join(additions)}."
+
+    @staticmethod
+    def _attach_fallback_citation(answer: Answer, chunks: list[RetrievedChunk]) -> None:
+        """Attach one grounded citation when the model omitted it."""
+        if answer.refused or answer.citations:
+            return
+        for chunk in chunks:
+            if chunk.clause == "meta" or chunk.page <= 0:
+                continue
+            answer.citations.append(
+                Citation(
+                    gost=chunk.gost_number,
+                    clause=chunk.clause,
+                    page=chunk.page,
+                    quote=chunk.text.strip()[:200],
+                    file=chunk.file,
+                    valid=True,
+                    page_valid=True,
+                    quote_valid=True,
+                )
+            )
+            return
 
     @staticmethod
     def _append_enumeration_titles(answer: str, chunks: list[RetrievedChunk]) -> str:

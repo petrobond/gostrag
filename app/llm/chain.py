@@ -24,14 +24,19 @@ class DeepSeekClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    async def chat(self, model: str, messages: list[dict], max_tokens: int) -> ChatResult:
+    async def chat(self, model: str, messages: list[dict], max_tokens: int, temperature: float = 0.1) -> ChatResult:
         if not self.settings.deepseek_api_key:
             raise RuntimeError("DEEPSEEK_API_KEY is not configured")
         async with httpx.AsyncClient(timeout=self.settings.request_timeout_sec) as client:
             response = await client.post(
                 f"{self.settings.deepseek_base_url}/chat/completions",
                 headers={"Authorization": f"Bearer {self.settings.deepseek_api_key}"},
-                json={"model": model, "messages": messages, "max_tokens": max_tokens},
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                },
             )
         if response.status_code != 200:
             raise GigaChatError(response.status_code, response.text[:300])
@@ -84,14 +89,19 @@ class LLMChain:
         messages: list[dict],
         complexity: str = "medium",
         max_tokens: int = 1200,
+        temperature: float = 0.1,
     ) -> LLMResult:
         last_error: Exception | None = None
         for model, provider in self.order(complexity):
             try:
                 if provider == "gigachat":
-                    result = await self.gigachat.chat(model, messages, max_tokens=max_tokens)
+                    result = await self.gigachat.chat(
+                        model, messages, max_tokens=max_tokens, temperature=temperature
+                    )
                 else:
-                    result = await self.deepseek.chat(model, messages, max_tokens=max_tokens)
+                    result = await self.deepseek.chat(
+                        model, messages, max_tokens=max_tokens, temperature=temperature
+                    )
                 return LLMResult(
                     content=result.content,
                     model=result.model,

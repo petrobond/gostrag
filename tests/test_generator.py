@@ -1,3 +1,5 @@
+import json
+
 from app.rag.generator import _parse_json, _resolve_chunk
 
 CHUNKS = [
@@ -28,6 +30,11 @@ def test_parse_markdown_json():
 
 def test_parse_json_with_prefix():
     assert _parse_json('Ответ: {"confidence": 0.5} конец')["confidence"] == 0.5
+
+
+def test_parse_double_encoded_json():
+    payload = json.dumps(json.dumps({"answer": "ok", "refused": False}, ensure_ascii=False))
+    assert _parse_json(payload)["answer"] == "ok"
 
 
 def test_parse_invalid_returns_empty():

@@ -20,18 +20,72 @@ from app.rag.retriever import Retriever  # noqa: E402
 from app.retrieval.bm25 import BM25Index  # noqa: E402
 from app.storage.qdrant import QdrantStore  # noqa: E402
 
-SOURCE_RE = re.compile(r"(.+?),\s*п\.\s*([\d.]+)")
+SOURCE_RE = re.compile(r"(.+?),\s*п\.\s*(\d+(?:\.\d+)*)\s*[–-]\s*(\d+(?:\.\d+)*)")
+CLAUSE_RE = re.compile(r"(.+?),\s*п\.\s*(\d+(?:\.\d+)*)")
+SECTION_RE = re.compile(r"(.+?),\s*раздел\s+(\d+(?:\.\d+)*)")
+TABLE_RE = re.compile(r"(.+?),\s*таблиц[аы]\s+([\wА-Яа-яЁё.-]+)")
 APPENDIX_RE = re.compile(r"(.+?),\s*приложение\s+([А-ЯA-Z]+)", re.IGNORECASE)
+BARE_RE = re.compile(r"^((?:ГОСТ\s*Р|ПНСТ)\s*[\d.]+(?:\s*[—–-]\s*\d{4})?)$")
+DOC_TYPE_RE = re.compile(r"^(ГОСТ\s*Р|ПНСТ)$")
 
 
-def parse_source(text: str) -> tuple[str, str, str] | None:
+def parse_source(text: str) -> tuple[str, str, object] | None:
     match = SOURCE_RE.match(text)
     if match:
+        return match.group(1).strip(), "range", (match.group(2).strip(), match.group(3).strip())
+    match = CLAUSE_RE.match(text)
+    if match:
         return match.group(1).strip(), "clause", match.group(2).strip()
+    match = SECTION_RE.match(text)
+    if match:
+        return match.group(1).strip(), "section", match.group(2).strip()
+    match = TABLE_RE.match(text)
+    if match:
+        return match.group(1).strip(), "table", match.group(2).strip()
     match = APPENDIX_RE.match(text)
     if match:
         return match.group(1).strip(), "appendix", match.group(2).strip()
+    match = BARE_RE.match(text.strip())
+    if match:
+        return match.group(1).strip(), "any", ""
+    match = DOC_TYPE_RE.match(text.strip())
+    if match:
+        return match.group(1).strip(), "doc_type", ""
     return None
+
+
+def _clause_tuple(value: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in value.split(".") if part.isdigit())
+
+
+def matches_source(chunk, gost: str, kind: str, value: object) -> bool:
+    if kind == "doc_type":
+        return chunk.gost_number.startswith(gost)
+    if chunk.gost_number != gost:
+        return False
+    if kind == "any":
+        return True
+    if kind == "clause":
+        clause = str(value)
+        return chunk.clause == clause or chunk.clause.startswith(clause + ".")
+    if kind == "range":
+        start, end = value  # type: ignore[misc]
+        base = chunk.clause.split("#")[0]
+        try:
+            current = _clause_tuple(base)
+            return _clause_tuple(str(start)) <= current <= _clause_tuple(str(end))
+        except ValueError:
+            return chunk.clause.startswith(str(start) + ".")
+    if kind == "section":
+        section = str(value)
+        return chunk.section == section or chunk.clause.startswith(section + ".")
+    if kind == "table":
+        expected = f"таблица{value}".lower().replace(" ", "")
+        actual = chunk.clause.lower().replace(" ", "")
+        return actual == expected
+    if kind == "appendix":
+        return chunk.section.lower().endswith(str(value).lower())
+    return False
 
 
 async def main(gold_path: Path, corpus: Path, index: Path, qdrant_url: str, top_k: int) -> None:
@@ -62,14 +116,11 @@ async def main(gold_path: Path, corpus: Path, index: Path, qdrant_url: str, top_
             found = False
             for chunk in retrieved:
                 for gost, kind, value in sources:
-                    if chunk.gost_number != gost:
-                        continue
-                    if kind == "clause" and (
-                        chunk.clause == value or chunk.clause.startswith(value + ".")
-                    ):
+                    if matches_source(chunk, gost, kind, value):
                         found = True
-                    if kind == "appendix" and chunk.section.lower().endswith(value.lower()):
-                        found = True
+                        break
+                if found:
+                    break
             if found:
                 hits += 1
             else:

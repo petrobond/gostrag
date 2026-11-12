@@ -121,14 +121,16 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 `ultraVDS`, `gigachatAPI`, `telegram`, `object_storage`, `deepseekApi`,
 `yandexCloud`, `git`, `amnezia.conf` (приватные ключи AWG), `amneziaVPN`.
 
-## 9. Тесты и метрики (v3.0.0, BGE-M3)
+## 9. Тесты и метрики (v3.1, BGE-M3)
 
-- `pytest`: 50 passed
-- gold v2 (BGE-M3, Cloud.ru): pass **0.946 (35/37)**, recall@8 **0.944**, citation recall 0.863
-- judge: faithfulness 0.889, relevancy 0.889, citation 0.863, refusal 0.946
-- контроль e5 (старая коллекция): pass **0.973 (36/37)**, recall@8 1.000, 0.919/0.919/0.906
-- известные провалы: E02 (anchor раздела 7 вместо 6), T01 (неполный список `Acc-I-*`),
-  M04 — на e5; исправление — этап 2 (KB-aware retrieval + табличный parent-child)
+- `pytest`: 56 passed
+- gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
+  citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
+- gold v3 (59, 24 стандарта): retrieval **1.000 (50/50)**; judge — см. `eval/report_v3_bge_m3.json`
+- контроль e5: pass 0.973 (36/37), 0.919/0.919/0.906
+- известный провал: M04 (comparison: 15 характеристик 71484.2 vs измеримые показатели 72663) —
+  атрибуция между ГОСТами; E02/T01 закрыты
+- reranker `bge-reranker-v2-m3`: A/B recall@8 1.000 → 0.740, top1 37 → 23 — **не используется**
 
 ## 10. Известные проблемы
 
@@ -141,9 +143,11 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
   `qdrant-client` всё ещё импортирует `fastembed`/ONNX (~100 МБ на процесс) —
   вынести в optional extra при уборке
 - Cloud.ru — внешняя зависимость на каждый запрос: retry на 429/5xx, таймаут 60 с;
-  при недоступности остаётся BM25-поиск
-- качество BGE-M3 ниже e5 на 1 вопрос gold v2 (0.946 vs 0.973) — E02/T01,
-  причина в retrieval/чанкинге; откат на e5 — одной переменной
+  при 502/503 dense-поиск отключается, ответ идёт по BM25 (`dense_search_unavailable`);
+  проверено 2026-11-13 во время аварии Cloud.ru
+- M04: comparison-ответ путает атрибуцию 15 характеристик (71484.2) и измеримых
+  показателей (72663); E02/T01 исправлены title-aware anchor и слиянием дублей `#8.2`
+- reranker отклонён по результатам A/B (ухудшает recall/top1)
 - клиент Qdrant 1.20.0 против сервера 1.12.4 — warning, запинить клиент <1.13
 
 ## 11. План
