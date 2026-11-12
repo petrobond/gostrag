@@ -17,10 +17,7 @@ COPY bot ./bot
 
 RUN pip install --upgrade pip && pip install .
 
-# Preload local embedding model so the container works offline after build.
-RUN python -c "from app.embeddings.local_e5 import LocalE5Embedder; LocalE5Embedder(cache_dir='/app/.cache/fastembed')"
-
-RUN mkdir -p /app/reports /data/corpus
+RUN mkdir -p /app/reports /data/corpus /app/.cache/fastembed
 
 EXPOSE 8000
 
