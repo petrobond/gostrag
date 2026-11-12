@@ -3,6 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Версия плана | 3.0.0 |
+| Ревизия плана | 1.1 (добавлен AmneziaWG и правило согласования) |
 | Дата | 2026-11-12 |
 | База | v2.1: pass rate 0.973 (36/37), recall@8 1.000, citation recall 0.944 |
 | Ветка | `release/v3.0.0` |
@@ -18,6 +19,23 @@
 | 3 | PDF-источники | только presigned S3 + inline-кнопки (без своего viewer) |
 | 4 | Reranker | не внедряем |
 | 5 | Ветка | `release/v3.0.0` |
+| 6 | VPN для Telegram | AmneziaWG на VPS по `secrets/amnezia.conf` (нативный AWG-конфиг) |
+| 7 | Где работает бот | **на VPS**, после поднятия VPN; разделение бота и ядра не применяется |
+
+> **Правило изменений.** Любое отклонение от этого плана (архитектура, объём работ,
+> порядок этапов, состав моделей, маршрутизация VPN, хранение данных) согласуется
+> с владельцем — Петром Бондаревым (petrobond). Без явного письменного согласования
+> изменения не вносятся. Согласованное изменение оформляется новой версией плана
+> с записью в разделе «Журнал изменений плана».
+
+## Отклонённые решения
+
+| Решение | Статус |
+|---|---|
+| Разделение: бот локально → API на VPS (`ASK_API_URL`) | **не применяется**. Бот работает на VPS; режим остаётся в коде как неактивная опция и не используется без согласования |
+| Собственный HTML-viewer источников | не делаем: только presigned S3 + `#page` + inline-кнопки |
+| Reranker `bge-reranker-v2-m3` | не внедряем (решение владельца) |
+
 
 ---
 
@@ -90,6 +108,99 @@ sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
 systemctl reload ssh
 ```
+
+## 0.2a. AmneziaWG VPN на VPS (обязательно для Telegram)
+
+Проблема: с VPS `api.telegram.org` недоступен (DNS отдаёт только IPv6, IPv4/DC фильтруются),
+бот в контейнере перезапускается. Решение: поднять AmneziaWG-туннель на VPS.
+
+Исходные данные:
+
+| Файл | Назначение |
+|---|---|
+| `secrets/amnezia.conf` | готовый нативный AmneziaWG-конфиг (obfuscation: `Jc/Jmin/Jmax/S1–S4/H1–H4/I1`, `[Peer] Endpoint 201.8.67.239:8581`) |
+| `secrets/amneziaVPN` | Amnezia Premium (`service_protocol=awg`, `api_key`) — резервный вариант, требует GUI/API, только по согласованию |
+
+Оба файла — секреты: в git не попадают, на VPS права `600`, в плане и логах не печатать.
+
+### Установка (userspace, без kernel-модуля)
+
+```bash
+sudo apt install -y golang-go make gcc git
+# amneziawg-go — userspace-реализация
+sudo git clone https://github.com/amnezia-vpn/amneziawg-go /opt/amneziawg-go
+cd /opt/amneziawg-go && sudo make && sudo make install
+# amneziawg-tools — awg, awg-quick
+sudo git clone https://github.com/amnezia-vpn/amneziawg-tools /opt/amneziawg-tools
+cd /opt/amneziawg-tools/src && sudo make && sudo make install
+awg --version && awg-quick --help | head -3
+```
+
+Версии фиксировать в `docs/operations.md` (тег/commit), обновление — только по согласованию.
+
+### Конфигурация
+
+```bash
+sudo install -d -m 700 /etc/amnezia/amneziawg
+sudo install -m 600 /opt/gostrag/secrets/amnezia.conf /etc/amnezia/amneziawg/awg0.conf
+```
+
+Маршрутизация — **split tunnel только для Telegram** (безопасно для SSH):
+
+- в установленной копии `awg0.conf` заменить `AllowedIPs` на список Telegram CIDR:
+  `91.108.4.0/22, 91.108.8.0/22, 91.108.12.0/22, 91.108.16.0/22, 91.108.20.0/22,
+  91.105.192.0/23, 149.154.160.0/20, 185.76.151.0/24, 2001:67c:4e8::/48`;
+- полный туннель (`0.0.0.0/0, ::/0`) — **только с письменного согласования владельца**:
+  риск потерять SSH при смене default route.
+
+```bash
+sudo systemctl enable --now awg-quick@awg0
+sudo systemctl status awg-quick@awg0 --no-pager
+sudo awg show
+```
+
+DNS: в конфиге `DNS = 100.64.0.1, 8.8.4.4`. Проверить, что VPS и контейнеры получают
+A-записи (а не только AAAA):
+
+```bash
+getent ahostsv4 api.telegram.org
+docker run --rm curlimages/curl -s -o /dev/null -w '%{http_code}\n' https://api.telegram.org
+```
+
+Если контейнеры не видят VPN-маршрут — добавить MASQUERADE для `awg0` и/или policy routing
+для docker-сети `172.18.0.0/16`; изменение фиксируется в плане (правило согласования).
+
+### Приёмка VPN
+
+| Проверка | Команда | Ожидание |
+|---|---|---|
+| туннель | `awg show` | peer, handshake < 2 мин, transfer > 0 |
+| связность | `ping -c 3 100.64.0.1` | 0% loss |
+| DNS | `getent ahostsv4 api.telegram.org` | есть IPv4 |
+| Telegram | `curl -4 -s -o /dev/null -w '%{http_code}' https://api.telegram.org` | `200` (или `404` на `/`) |
+| из контейнера | `docker run --rm curlimages/curl ...` | `200/404` |
+| бот | `docker compose logs bot` | нет `TelegramNetworkError`, нет рестартов |
+| бот в Telegram | `/gosts`, вопрос | ответ со ссылкой на PDF |
+
+### Откат VPN
+
+```bash
+sudo systemctl disable --now awg-quick@awg0
+sudo awg-quick down awg0 || true
+```
+
+### Риски VPN
+
+| Риск | Митигация |
+|---|---|
+| Потеря SSH при full tunnel | split tunnel по умолчанию; full tunnel — только по согласованию; держать вторую SSH-сессию |
+| Утечка приватных ключей | конфиг только в `secrets/`, `chmod 600`, не печатать в логах, gitleaks |
+| DNS только AAAA | VPN DNS + `getent ahostsv4`, при необходимости `dns:` в compose |
+| MTU/фрагментация | `MTU = 1280` при проблемах с TLS |
+| Несовместимость версий awg | фиксировать версии `amneziawg-go`/`amneziawg-tools`, тест после обновления |
+
+Резервный вариант (если нативный конфиг не поднимется): AmneziaVPN GUI под Xvfb +
+импорт `secrets/amneziaVPN` — **только по согласованию**, т.к. GUI-автоматизация хрупкая.
 
 ## 0.3. Авторизация GitHub (пользователь petrobond)
 
@@ -191,6 +302,7 @@ docker compose -f deploy/docker-compose.yml logs -f bot
 | бот | `/gosts` | 37 стандартов |
 | вопрос | «Что говорится в п. 3.6.4 ГОСТ Р 71476—2024?» | ответ + цитата |
 | PDF | ссылка из цитаты | HEAD 200, `#page=N` |
+| VPN | `awg show`, `curl -4 api.telegram.org` | handshake есть, HTTP 200/404 |
 | конфликт | `grep -i conflict` в логах | пусто (один poller) |
 
 ## 0.7. Заглушить локальную систему
@@ -225,6 +337,26 @@ kill <pid>
 ## 0.10. Оценка этапа
 
 0.5–1 день (с учётом переноса данных и приёмки).
+
+## 0.11. Статус этапа 0 на 2026-11-12
+
+| Пункт | Статус | Факт |
+|---|---|---|
+| VPS, пользователь, Docker, UFW, fail2ban, swap | ✅ | Ubuntu 26.04, 2 vCPU, 3.3 ГБ + swap 2 ГБ, `gostrag` + NOPASSWD sudo |
+| GitHub-доступ (`petrobond`) | ✅ | `ssh -T git@github.com` → `Hi petrobond!` |
+| Репозиторий и ветка | ✅ | `/opt/gostrag`, `release/v3.0.0` |
+| Секреты и `deploy/.env` | ✅ | 44 переменные, права `600` |
+| Qdrant | ✅ | v1.12.4, снапшот восстановлен: 4452 точки, `green` |
+| Postgres / Redis | ✅ | healthy |
+| app | ✅ | `/health` → `index_ready=true`, version 3.0.0 |
+| S3-ссылки | ✅ | `enabled=true, keys=39`, цитаты содержат `file`, `#page=N` |
+| **VPN (0.2a)** | ⛔ | **не поднят** |
+| **Telegram** | ⛔ | `api.telegram.org` недоступен (DNS только IPv6, IPv4/DC фильтруются) |
+| **Бот на VPS** | ⛔ | контейнер стартует, но не может поллить Telegram |
+| Локальный бот | ⏸ | остановлен; локальный Qdrant оставлен как standby |
+
+Блокер этапа 0 — отсутствие VPN. До поднятия AmneziaWG бот на VPS неработоспособен.
+
 
 ---
 
@@ -331,7 +463,7 @@ kill <pid>
 
 | Этап | Содержание | Оценка | Блокирует |
 |---|---|---|---|
-| 0 | Переезд на VPS | 0.5–1 день | все остальные |
+| 0 | Переезд на VPS + AmneziaWG | 1–1.5 дня | все остальные |
 | 1 | PDF-ссылки и кнопки | 0.5 дня | — |
 | 2 | База знаний | 2–3 дня | этап 6 (gold-KB) |
 | 3 | Аудит в боте + usage (PG) | 1.5 дня | этап 6 |
@@ -372,12 +504,17 @@ kill <pid>
 | Telegram не открывает `#page` в части клиентов | Средняя | Низкое | кнопка + `/pdf`, ссылка в тексте |
 | KB-слой дублирует retrieval | Средняя | Низкое | KB только навигация и синонимы |
 | Postgres/Redis усложняют эксплуатацию | Низкая | Среднее | healthchecks, бэкапы, лимиты памяти |
+| Telegram недоступен с VPS | **Высокая (факт)** | **Высокое** | AmneziaWG split tunnel (0.2a), проверка `curl -4 api.telegram.org` |
+| Потеря SSH при full tunnel | Средняя | Высокое | split tunnel по умолчанию; full tunnel только по согласованию |
+| Утечка AWG-конфига (приватные ключи) | Низкая | Высокое | `secrets/`, `chmod 600`, не печатать, gitleaks |
 
 ---
 
 # Definition of Done (v3.0.0)
 
 - [ ] VPS 45.15.252.185: бот и API работают, локальный заглушён.
+- [ ] AmneziaWG поднят (split tunnel), `api.telegram.org` с VPS отвечает 200/404.
+- [ ] Бот на VPS поллит Telegram без `TelegramNetworkError` и лишних рестартов.
 - [ ] Секреты на VPS с правами 600, в git отсутствуют, gitleaks чист.
 - [ ] Бэкапы Postgres и Qdrant по расписанию, healthcheck с алертом.
 - [ ] PDF открывается на нужной странице из текста и из кнопки; ≥95% ответов со ссылкой.
@@ -393,8 +530,19 @@ kill <pid>
 
 # Открытые вопросы к реализации
 
-1. Пользователь на VPS: `gostrag` (рекомендуется) или `user` из `secrets/ultraVDS`?
-2. GitHub-ключ: переносить `~/.ssh/petrobond` на VPS (быстро) или генерировать новый (безопаснее)?
-3. Репозиторий на VPS: `/opt/gostrag` (по умолчанию в плане) — согласовать.
-4. Домен/TLS: нужен ли Caddy и домен для API или достаточно localhost + Telegram?
+1. VPN: подтвердить split tunnel (Telegram CIDR) как основной вариант; full tunnel — только по отдельному согласованию.
+2. VPN: устраивает ли userspace `amneziawg-go` (без kernel-модуля) или нужен DKMS-модуль.
+3. Пользователь на VPS: `gostrag` (рекомендуется) или `user` из `secrets/ultraVDS`?
+4. GitHub-ключ: переносить `~/.ssh/petrobond` на VPS (быстро) или генерировать новый (безопаснее)?
+5. Репозиторий на VPS: `/opt/gostrag` (по умолчанию в плане) — согласовать.
+6. Домен/TLS: нужен ли Caddy и домен для API или достаточно localhost + Telegram?
+
+---
+
+# Журнал изменений плана
+
+| Ревизия | Дата | Изменение | Основание |
+|---|---|---|---|
+| 1.0 | 2026-11-12 | Первая версия: VPS-переезд, KB, PDF-источники, долги планов 01/05 | Владелец |
+| 1.1 | 2026-11-12 | Добавлен этап 0.2a (AmneziaWG: установка, split tunnel, DNS, приёмка, откат, риски); добавлено правило согласования отклонений; зафиксированы отклонённые решения и статус этапа 0 | Указание владельца |
 
