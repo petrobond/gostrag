@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastembed import TextEmbedding
 
 
@@ -25,3 +27,9 @@ class LocalE5Embedder:
 
     def embed_query(self, text: str) -> list[float]:
         return list(map(float, next(iter(self.model.query_embed(text)))))
+
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        return await asyncio.to_thread(self.embed_documents, texts)
+
+    async def aembed_query(self, text: str) -> list[float]:
+        return await asyncio.to_thread(self.embed_query, text)

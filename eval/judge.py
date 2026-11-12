@@ -6,7 +6,7 @@ import argparse
 import asyncio
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -175,7 +175,7 @@ async def evaluate(
     metric_counts = {key: len(_scores(key)) for key in METRIC_KEYS}
 
     report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "corpus_version": gold.get("corpus_version"),
         "questions_total": len(questions),
         "questions_scored": len(scored),

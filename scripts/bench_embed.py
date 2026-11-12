@@ -25,7 +25,7 @@ async def main() -> None:
 
     embedder = get_embedder(settings)
     started = time.perf_counter()
-    vectors = embedder.embed_documents(texts)
+    vectors = await embedder.aembed_documents(texts)
     embed_time = time.perf_counter() - started
     print(f"embed {len(texts)} docs: {embed_time:.2f}s ({len(texts) / embed_time:.2f} docs/s)")
 

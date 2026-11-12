@@ -47,6 +47,6 @@ class BM25Index:
             pickle.dump(self, fh)
 
     @classmethod
-    def load(cls, path: Path) -> "BM25Index":
+    def load(cls, path: Path) -> BM25Index:
         with path.open("rb") as fh:
             return pickle.load(fh)

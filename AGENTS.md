@@ -26,14 +26,17 @@ RAG-система по российским стандартам ИИ (39 PDF: 
 
 - `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст
 - `app/` — FastAPI: `POST /api/ask`, `GET /health`
-- Qdrant — коллекция `gost_chunks`, 4452 точки, v1.12.4
+- Qdrant — коллекция `gost_chunks_bge_m3` (прод, 4452 точки), `gost_chunks` — старая коллекция e5 (rollback), v1.12.4
 - Postgres 16 и Redis 7 — в compose; usage в PG пока не пишется (этап 3 плана)
 - S3 (Yandex Object Storage) — 39 PDF в `gost/`, presigned URL + `#page`
 - LLM: GigaChat-3-Ultra (fallback Max → Pro → Lite → DeepSeek) — только API
-- Эмбеддинги: `intfloat/multilingual-e5-large`, ONNX Runtime, локально, 1024d
-  - модель НЕ в образе: Docker volume `gostrag_fastembed_cache` (~2.1 ГБ)
-  - fastembed не добавляет префиксы e5 (`query:`/`passage:`) — кандидат на
-    улучшение, требует согласования и переиндексации
+- Эмбеддинги: `BAAI/bge-m3` через Cloud.ru Foundation Models API
+  (`POST /v1/embeddings`, OpenAI-compatible), 1024d, 8192 контекста, 0.61 ₽/1M
+  - `EMBEDDING_PROVIDER=cloudru`, модель внутренняя (данные не логируются)
+  - локальная `intfloat/multilingual-e5-large` (ONNX, volume `gostrag_fastembed_cache`)
+    — fallback: `EMBEDDING_PROVIDER=local`; модель в образе не нужна
+  - резерв API: `Qwen/Qwen3-Embedding-0.6B` (1024d, recall@8 1.000, pass 0.946)
+  - таблица/чанкинг: T01 (полный список `Acc-I-*`) — известный дефект, этап 2
 
 ## 5. Где что запущено
 
@@ -57,17 +60,18 @@ VPS (ultraVDS):
 ## 6. Данные и индексы
 
 - корпус: 38 документов, 4791 чанк (3825 clause + 928 table + 38 meta)
-- уникальных по `text_hash`: 4643
-- Qdrant: 4452 точки, id = `uuid5(chunk_id)`, payload = чанк целиком
-- BM25: `data/index/bm25.pkl` (~6.5 МБ)
-- на VPS Qdrant восстановлен из снапшота, переиндексация не нужна
+- уникальных по `text_hash`: 4643; уникальных `uuid5(chunk_id)`: 4452
+- Qdrant: `gost_chunks_bge_m3` (прод) и `gost_chunks` (e5, rollback) — по 4452 точки,
+  id = `uuid5(chunk_id)`, payload = чанк целиком
+- BM25: `data/index/bm25.pkl` (~6.5 МБ), не зависит от модели эмбеддингов
+- переиндексация BGE-M3 на VPS: 150 с (31 чанк/с), стоимость ~0.74 ₽
 
 ## 7. Команды
 
 Локально:
 
 ```bash
-.venv/bin/python -m pytest -q tests          # 45 тестов
+.venv/bin/python -m pytest -q tests          # 50 тестов
 .venv/bin/python -m ruff check app bot eval tests
 .venv/bin/python scripts/ask.py "вопрос"
 .venv/bin/python scripts/eval_retrieval.py --gold eval/gold_set_v2.yaml --top-k 8
@@ -79,6 +83,25 @@ VPS (ultraVDS):
 ```bash
 python -m app.cli ingest --source data/source --out data/corpus
 python -m app.cli embed --corpus data/corpus --index data/index --qdrant-url http://qdrant:6333
+```
+
+Переиндексация эмбеддингов через Cloud.ru (VPS, ~3 мин):
+
+```bash
+sudo docker compose -f deploy/docker-compose.yml run --rm \
+  -e EMBEDDING_PROVIDER=cloudru -e QDRANT_COLLECTION=gost_chunks_bge_m3 \
+  app python -m app.cli embed --corpus /data/corpus --index /tmp/index \
+  --qdrant-url http://qdrant:6333
+```
+
+Оценка retrieval/judge (VPS, репозиторий монтируется):
+
+```bash
+sudo docker compose -f deploy/docker-compose.yml run --rm \
+  -e EMBEDDING_PROVIDER=cloudru -e QDRANT_COLLECTION=gost_chunks_bge_m3 \
+  -v /opt/gostrag:/repo -w /repo app \
+  python scripts/eval_retrieval.py --gold eval/gold_set_v2.yaml --top-k 8 \
+  --qdrant-url http://qdrant:6333
 ```
 
 VPS:
@@ -98,12 +121,14 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 `ultraVDS`, `gigachatAPI`, `telegram`, `object_storage`, `deepseekApi`,
 `yandexCloud`, `git`, `amnezia.conf` (приватные ключи AWG), `amneziaVPN`.
 
-## 9. Тесты и метрики (v2.1)
+## 9. Тесты и метрики (v3.0.0, BGE-M3)
 
-- `pytest`: 45 passed
-- gold v2: pass rate **0.973 (36/37)**, recall@8 **1.000**, citation recall **0.944**
-- judge: faithfulness 0.919, relevancy 0.919, citation 0.906, refusal 0.973
-- известный провал: M04 (71484.2 vs 72663) — сравнение характеристик и показателей
+- `pytest`: 50 passed
+- gold v2 (BGE-M3, Cloud.ru): pass **0.946 (35/37)**, recall@8 **0.944**, citation recall 0.863
+- judge: faithfulness 0.889, relevancy 0.889, citation 0.863, refusal 0.946
+- контроль e5 (старая коллекция): pass **0.973 (36/37)**, recall@8 1.000, 0.919/0.919/0.906
+- известные провалы: E02 (anchor раздела 7 вместо 6), T01 (неполный список `Acc-I-*`),
+  M04 — на e5; исправление — этап 2 (KB-aware retrieval + табличный parent-child)
 
 ## 10. Известные проблемы
 
@@ -112,9 +137,14 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
   (PostUp `resolvectl dns awg0 8.8.8.8; domain awg0 ~telegram.org`)
 - Режим `ASK_API_URL` (бот локально → API на VPS) закоммичен (70ed838),
   но **не одобрен и не используется**
-- `app` и `bot` — два процесса, каждый может держать копию e5 (~0.8–1.5 ГБ);
-  на 3.3 ГБ RAM это риск OOM — решение только по согласованию
-- префиксы e5 не добавляются — потенциальный прирост качества после переиндексации
+- RAM разгружена: app ~212 МБ, bot ~346 МБ, swap ~0.7 ГБ (было 4.65 ГБ);
+  `qdrant-client` всё ещё импортирует `fastembed`/ONNX (~100 МБ на процесс) —
+  вынести в optional extra при уборке
+- Cloud.ru — внешняя зависимость на каждый запрос: retry на 429/5xx, таймаут 60 с;
+  при недоступности остаётся BM25-поиск
+- качество BGE-M3 ниже e5 на 1 вопрос gold v2 (0.946 vs 0.973) — E02/T01,
+  причина в retrieval/чанкинге; откат на e5 — одной переменной
+- клиент Qdrant 1.20.0 против сервера 1.12.4 — warning, запинить клиент <1.13
 
 ## 11. План
 

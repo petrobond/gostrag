@@ -33,6 +33,19 @@ class Settings(BaseSettings):
     embedding_cache_dir: str = Field(default="", alias="EMBEDDING_CACHE_DIR")
     embedding_threads: int = Field(default=0, alias="EMBEDDING_THREADS")
 
+    # Cloud.ru Foundation Models embeddings (OpenAI-compatible /v1/embeddings)
+    cloudru_api_key: str = Field(default="", alias="CLOUDRU_API_KEY")
+    cloudru_base_url: str = Field(
+        default="https://foundation-models.api.cloud.ru/v1", alias="CLOUDRU_BASE_URL"
+    )
+    cloudru_embedding_model: str = Field(
+        default="BAAI/bge-m3", alias="CLOUDRU_EMBEDDING_MODEL"
+    )
+    cloudru_embedding_dim: int = Field(default=1024, alias="CLOUDRU_EMBEDDING_DIM")
+    cloudru_batch_size: int = Field(default=16, alias="CLOUDRU_BATCH_SIZE")
+    cloudru_timeout_sec: int = Field(default=60, alias="CLOUDRU_TIMEOUT_SEC")
+    cloudru_max_retries: int = Field(default=3, alias="CLOUDRU_MAX_RETRIES")
+
     # Yandex AI Studio fallback
     yc_folder_id: str = Field(default="", alias="YC_FOLDER_ID")
     yc_api_key: str = Field(default="", alias="YC_API_KEY")

@@ -15,15 +15,18 @@ class GigaChatEmbedder:
         self.settings = settings
         self.client = GigaChatClient(settings)
 
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return asyncio.run(self._embed(texts))
-
-    async def _embed(self, texts: list[str]) -> list[list[float]]:
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
         for start in range(0, len(texts), 16):
             batch = texts[start : start + 16]
             vectors.extend(await self.client.embeddings(self.settings.gigachat_embedding_model, batch))
         return vectors
 
+    async def aembed_query(self, text: str) -> list[float]:
+        return (await self.aembed_documents([text]))[0]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return asyncio.run(self.aembed_documents(texts))
+
     def embed_query(self, text: str) -> list[float]:
-        return self.embed_documents([text])[0]
+        return asyncio.run(self.aembed_query(text))

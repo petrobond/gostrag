@@ -8,14 +8,14 @@ import time
 import uuid
 from collections import Counter
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from qdrant_client.http import models as qm
 
 from app.config import get_settings
 from app.embeddings.factory import get_embedder
-from app.ingest.chunk import build_chunks, chunk_stats
+from app.ingest.chunk import build_chunks
 from app.ingest.parse import parse_document
 from app.retrieval.bm25 import BM25Index
 from app.storage.qdrant import QdrantStore
@@ -36,7 +36,7 @@ def cmd_ingest(args: argparse.Namespace) -> None:
     errors: list[dict] = []
     skipped_duplicates: list[str] = []
     seen_hashes: dict[str, str] = {}
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     unique_pdfs = []
     for pdf in pdfs:
@@ -132,7 +132,7 @@ async def _embed_and_upsert(
     started = time.perf_counter()
     for start in range(0, len(chunks), batch_size):
         batch = chunks[start : start + batch_size]
-        vectors = embedder.embed_documents([row["text"] for row in batch])
+        vectors = await embedder.aembed_documents([row["text"] for row in batch])
         points = [
             qm.PointStruct(
                 id=str(uuid.uuid5(uuid.NAMESPACE_URL, row["chunk_id"])),
@@ -169,7 +169,7 @@ def cmd_embed(args: argparse.Namespace) -> None:
     bm25.save(index_dir / "bm25.pkl")
 
     report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "embedding_provider": settings.embedding_provider,
         "embedding_dim": embedder.dim,
         "chunks_total": len(chunks),

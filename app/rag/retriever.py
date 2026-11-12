@@ -69,9 +69,8 @@ class Retriever:
             if appendix:
                 exact = self.chunks.find_appendix(exact_gost, appendix)
 
-        dense_hits = await self.qdrant.search(
-            self.embedder.embed_query(query), limit=20, gost_number=exact_gost
-        )
+        vector = await self.embedder.aembed_query(query)
+        dense_hits = await self.qdrant.search(vector, limit=20, gost_number=exact_gost)
         bm25_hits = self.bm25.search(query, top_k=40)
         if exact_gost:
             filtered = []

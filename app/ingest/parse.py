@@ -81,7 +81,11 @@ def _join(acc: str, line: str) -> str:
 
 
 def _extract_meta(path: Path, lines: list[Line]) -> DocMeta:
-    meta = DocMeta(doc_id=path.stem, filename=path.name, pages=max((l.page for l in lines), default=0))
+    meta = DocMeta(
+        doc_id=path.stem,
+        filename=path.name,
+        pages=max((line.page for line in lines), default=0),
+    )
     title_parts: list[str] = []
     for line in lines:
         text = line.text.strip()

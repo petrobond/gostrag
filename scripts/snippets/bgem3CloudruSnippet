@@ -1,0 +1,18 @@
+import os
+
+from openai import OpenAI
+
+api_key = os.environ["API_KEY"]
+url = "https://foundation-models.api.cloud.ru/v1"
+
+client = OpenAI(
+    api_key=api_key,
+    base_url=url
+)
+
+response = client.embeddings.create(
+    model="BAAI/bge-m3",
+    input=["Как написать хороший код?"]
+)
+
+print(response.data[0].embedding)

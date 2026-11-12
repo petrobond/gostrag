@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 STATUS_LABELS = {
@@ -115,7 +115,7 @@ def write_report(
         "json_path": str(json_path),
         "md_sha256": _hash(markdown),
         "json_sha256": _hash(json_path.read_text(encoding="utf-8")),
-        "generated_at": meta.get("generated_at", datetime.now(timezone.utc).isoformat()),
+        "generated_at": meta.get("generated_at", datetime.now(UTC).isoformat()),
     }
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest

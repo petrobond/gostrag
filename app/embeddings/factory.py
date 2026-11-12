@@ -6,6 +6,10 @@ from app.embeddings.base import Embedder
 
 def get_embedder(settings: Settings) -> Embedder:
     provider = settings.embedding_provider.lower()
+    if provider == "cloudru":
+        from app.embeddings.cloudru import CloudRuEmbedder
+
+        return CloudRuEmbedder(settings)
     if provider == "gigachat":
         from app.embeddings.gigachat import GigaChatEmbedder
 

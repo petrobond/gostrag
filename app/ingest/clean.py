@@ -63,17 +63,13 @@ def is_noise_text(text: str) -> bool:
         return True
     if len(normalized) == 1:
         return True
-    if len(normalized) <= 3 and normalized.isupper() and normalized.isalpha():
-        return True
-    return False
+    return len(normalized) <= 3 and normalized.isupper() and normalized.isalpha()
 
 
 def should_drop(span: Span) -> bool:
     if is_background(span.color) or is_red_stamp(span.color):
         return True
-    if is_service_text(span.text):
-        return True
-    return False
+    return is_service_text(span.text)
 
 
 @dataclass(slots=True)
