@@ -51,8 +51,8 @@ VPS (ultraVDS):
 
 - `/Users/Lenovo/Projects/RAG_Timur`, venv `.venv`
 
-Блокер: `api.telegram.org` с VPS недоступен (DNS отдаёт только IPv6, IPv4/DC
-фильтруются). Решение — AmneziaWG, этап 0.2a плана.
+Блокер снят 2026-11-12: AmneziaWG (`awg-quick@awg0`, split tunnel) поднят,
+`api.telegram.org` доступен, бот на VPS поллит Telegram.
 
 ## 6. Данные и индексы
 
@@ -107,7 +107,9 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 
 ## 10. Известные проблемы
 
-- Telegram с VPS недоступен → бот в контейнере рестартует; нужен VPN (этап 0.2a)
+- Telegram с VPS работает через AmneziaWG (`awg-quick@awg0`, split tunnel):
+  DNS `100.64.0.1` недоступен, фактически используется `8.8.8.8` через туннель
+  (PostUp `resolvectl dns awg0 8.8.8.8; domain awg0 ~telegram.org`)
 - Режим `ASK_API_URL` (бот локально → API на VPS) закоммичен (70ed838),
   но **не одобрен и не используется**
 - `app` и `bot` — два процесса, каждый может держать копию e5 (~0.8–1.5 ГБ);
