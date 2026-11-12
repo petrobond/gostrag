@@ -6,13 +6,12 @@ import json
 import os
 import sys
 from pathlib import Path
-
-from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
 from types import SimpleNamespace
 
 import httpx
+from aiogram import Bot, Dispatcher, F
+from aiogram.filters import Command, CommandStart
+from aiogram.types import Message
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
