@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import html
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -178,9 +179,9 @@ async def main() -> None:
     global service
     service = AskService(
         settings,
-        Path("data/corpus"),
-        Path("data/index"),
-        "http://localhost:6333",
+        Path(os.getenv("DATA_CORPUS_DIR", "data/corpus")),
+        Path(os.getenv("INDEX_DIR", "data/index")),
+        settings.qdrant_url,
     )
     bot = Bot(token=settings.telegram_bot_token)
     await dp.start_polling(bot)
