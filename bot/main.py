@@ -10,6 +10,9 @@ from pathlib import Path
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
+from types import SimpleNamespace
+
+import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -24,6 +27,31 @@ hour_limiter = SlidingWindowLimiter(settings.hourly_questions_per_user, 3600)
 day_limiter = SlidingWindowLimiter(settings.daily_questions_per_user, 86400)
 service: AskService | None = None
 s3 = S3Store(settings)
+
+
+class RemoteAnswerService:
+    """Bot in remote mode: calls the RAG API on the VPS instead of loading the index."""
+
+    def __init__(self, base_url: str) -> None:
+        self.base_url = base_url.rstrip("/")
+
+    async def ask(self, question: str, top_k: int | None = None) -> SimpleNamespace:
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                f"{self.base_url}/api/ask",
+                json={"question": question, "top_k": top_k or 6},
+            )
+            response.raise_for_status()
+            data = response.json()
+        answer = SimpleNamespace(
+            answer=data.get("answer", ""),
+            citations=[SimpleNamespace(**item) for item in data.get("citations", [])],
+            refused=bool(data.get("refused")),
+            missing=data.get("missing", []),
+        )
+        return SimpleNamespace(
+            answer=answer, chunks=[], latency_ms=int(data.get("latency_ms", 0))
+        )
 
 
 def citation_html(citation) -> str:
@@ -177,12 +205,16 @@ async def handle_question(message: Message, question: str) -> None:
 
 async def main() -> None:
     global service
-    service = AskService(
-        settings,
-        Path(os.getenv("DATA_CORPUS_DIR", "data/corpus")),
-        Path(os.getenv("INDEX_DIR", "data/index")),
-        settings.qdrant_url,
-    )
+    api_url = settings.ask_api_url.strip()
+    if api_url:
+        service = RemoteAnswerService(api_url)
+    else:
+        service = AskService(
+            settings,
+            Path(os.getenv("DATA_CORPUS_DIR", "data/corpus")),
+            Path(os.getenv("INDEX_DIR", "data/index")),
+            settings.qdrant_url,
+        )
     bot = Bot(token=settings.telegram_bot_token)
     await dp.start_polling(bot)
 

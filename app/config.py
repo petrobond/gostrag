@@ -75,6 +75,7 @@ class Settings(BaseSettings):
 
     # App
     app_version: str = Field(default="0.1.0", alias="APP_VERSION")
+    ask_api_url: str = Field(default="", alias="ASK_API_URL")
     corpus_version: str = Field(default="2026.11.11", alias="CORPUS_VERSION")
     data_source_dir: str = Field(default="/data/source", alias="DATA_SOURCE_DIR")
     data_corpus_dir: str = Field(default="/data/corpus", alias="DATA_CORPUS_DIR")
