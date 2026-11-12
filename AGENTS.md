@@ -126,8 +126,9 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 - `pytest`: 56 passed
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
-- gold v3 (50, 19 стандартов): retrieval/judge — после восстановления Cloud.ru (сейчас 500);
-  текущий гейт — gold v2 **0.973 (36/37)**
+- gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **0.98 (49/50)**,
+  faithfulness/relevancy 0.92, citation 0.974, citation recall **1.000 (64/64)**;
+  единственный провал — M04
 - контроль e5: pass 0.973 (36/37), 0.919/0.919/0.906
 - известный провал: M04 (comparison: 15 характеристик 71484.2 vs измеримые показатели 72663) —
   атрибуция между ГОСТами; E02/T01 закрыты
