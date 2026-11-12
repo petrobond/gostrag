@@ -33,6 +33,7 @@ class RetrievedChunk:
     score: float
     doc_id: str
     clause_title: str = ""
+    file: str = ""
 
 
 class Retriever:
@@ -347,4 +348,5 @@ class Retriever:
             score=score,
             doc_id=payload["doc_id"],
             clause_title=payload.get("clause_title", ""),
+            file=str(payload.get("provenance", {}).get("file", "")),
         )

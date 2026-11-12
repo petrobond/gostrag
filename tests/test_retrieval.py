@@ -122,6 +122,23 @@ def test_group_order_puts_shallow_clauses_first():
     assert [row["clause"] for row in ordered] == ["8.1", "8.3.1", "8.3.3", "8.2.1.1"]
 
 
+def test_to_chunk_carries_source_file():
+    payload = {
+        "chunk_id": "doc#3.1.2",
+        "text": "текст",
+        "gost_number": "ГОСТ Р 71476—2024",
+        "clause": "3.1.2",
+        "clause_title": "компонент ИИ",
+        "section": "3",
+        "section_title": "Термины",
+        "page": 5,
+        "doc_id": "doc",
+        "provenance": {"file": "gost-r-71476-2024.pdf"},
+    }
+    chunk = Retriever._to_chunk(payload, 1.0)
+    assert chunk.file == "gost-r-71476-2024.pdf"
+
+
 def make_retrieved(clause: str, title: str):
     from app.rag.retriever import RetrievedChunk
 

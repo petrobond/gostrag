@@ -146,7 +146,7 @@ class Generator:
                 page=int(chunk.get("page", 0) or 0),
                 quote=quote,
             )
-            citation.file = str(chunk.get("provenance", {}).get("file", ""))
+            citation.file = str(chunk.get("file") or chunk.get("provenance", {}).get("file", ""))
             citation.page_valid = True
             citation.quote_valid = bool(quote) and _norm(quote) in _norm(chunk["text"])
             citation.valid = True

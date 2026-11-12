@@ -134,6 +134,7 @@ class AskService:
                 score=1.0,
                 doc_id=row["doc_id"],
                 clause_title=row.get("clause_title", ""),
+                file=str(row.get("provenance", {}).get("file", "")),
             )
             for row in rows
         ]
