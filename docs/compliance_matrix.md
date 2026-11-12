@@ -9,7 +9,8 @@
 | Частично | 8 |
 | Не соответствует | 1 |
 | Не применимо | 17 |
-| Compliance rate (от применимых) | **56.67%** |
+| Compliance rate (от всех требований) | **56.67%** |
+| Compliance rate (от применимых) | **79.07% (34/43)** |
 | Отчёт | `docs/reports/3.1.0/1/audit.md` |
 | Manifest | `docs/reports/3.1.0/1/manifest.json` |
 
