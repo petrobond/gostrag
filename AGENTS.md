@@ -27,6 +27,8 @@ RAG-система по российским стандартам ИИ (39 PDF: 
 - `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст
 - `app/` — FastAPI: `POST /api/ask`, `GET /health`
 - Qdrant — коллекция `gost_chunks_bge_m3` (прод, 4452 точки), `gost_chunks` — старая коллекция e5 (rollback), v1.12.4
+- KB/граф — `app/kb`, `data/kb`: 400 терминов, 97 узлов (37 корпусных + 60 внешних),
+  116 рёбер (24 внутренних); команды `/kb`, `/term`, `/links`; 1-hop для cross_reference
 - Postgres 16 и Redis 7 — в compose; usage в PG пока не пишется (этап 3 плана)
 - S3 (Yandex Object Storage) — 39 PDF в `gost/`, presigned URL + `#page`
 - LLM: GigaChat-3-Ultra (fallback Max → Pro → Lite → DeepSeek) — только API
@@ -63,6 +65,7 @@ VPS (ultraVDS):
 - уникальных по `text_hash`: 4643; уникальных `uuid5(chunk_id)`: 4452
 - Qdrant: `gost_chunks_bge_m3` (прод) и `gost_chunks` (e5, rollback) — по 4452 точки,
   id = `uuid5(chunk_id)`, payload = чанк целиком
+- KB: `data/kb/terms.jsonl` (400), `graph.json` (97 узлов / 116 рёбер), `outline.json` (37 стандартов)
 - BM25: `data/index/bm25.pkl` (~6.5 МБ), не зависит от модели эмбеддингов
 - переиндексация BGE-M3 на VPS: 150 с (31 чанк/с), стоимость ~0.74 ₽
 
@@ -104,6 +107,13 @@ sudo docker compose -f deploy/docker-compose.yml run --rm \
   --qdrant-url http://qdrant:6333
 ```
 
+KB/граф:
+
+```bash
+python scripts/build_kb.py          # data/kb
+python scripts/build_gold_kb.py     # eval/gold_kb.yaml
+```
+
 VPS:
 
 ```bash
@@ -123,15 +133,14 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 
 ## 9. Тесты и метрики (v3.1, BGE-M3)
 
-- `pytest`: 56 passed
+- `pytest`: **64 passed**
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **0.98 (49/50)**,
-  faithfulness/relevancy 0.92, citation 0.974, citation recall **1.000 (64/64)**;
-  единственный провал — M04
-- контроль e5: pass 0.973 (36/37), 0.919/0.919/0.906
-- известный провал: M04 (comparison: 15 характеристик 71484.2 vs измеримые показатели 72663) —
-  атрибуция между ГОСТами; E02/T01 закрыты
+  faithfulness/relevancy 0.96/0.98, citation 0.951, citation recall **1.000 (64/64)**
+- gold-KB (10): pass **0.90 (9/10)**; KB10 (внешние ссылки) — известный провал
+- M04: **pass** (факт-карточка 71484.2 п. 5.2 / 72663 п. 8.1)
+- известные провалы: TB01 (таблица 6.3), KB10; E02/T01/M04 закрыты
 - reranker `bge-reranker-v2-m3`: A/B recall@8 1.000 → 0.740, top1 37 → 23 — **не используется**
 
 ## 10. Известные проблемы
@@ -147,8 +156,8 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 - Cloud.ru — внешняя зависимость на каждый запрос: retry на 429/5xx, таймаут 60 с;
   при 502/503 dense-поиск отключается, ответ идёт по BM25 (`dense_search_unavailable`);
   проверено 2026-11-13 во время аварии Cloud.ru
-- M04: comparison-ответ путает атрибуцию 15 характеристик (71484.2) и измеримых
-  показателей (72663); E02/T01 исправлены title-aware anchor и слиянием дублей `#8.2`
+- M04: comparison-атрибуция закрыта факт-карточкой (71484.2 п. 5.2 — 15 характеристик,
+  72663 п. 8.1 — измеримые показатели); остались TB01 (сложная таблица) и KB10 (внешние ссылки)
 - reranker отклонён по результатам A/B (ухудшает recall/top1)
 - клиент Qdrant 1.20.0 против сервера 1.12.4 — warning, запинить клиент <1.13
 

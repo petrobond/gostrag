@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import tomllib
 from pathlib import Path
 
 
 def get_version(root: Path | None = None) -> str:
+    env_version = os.getenv("APP_VERSION", "").strip()
+    if env_version:
+        return env_version
     root = root or Path.cwd()
     with (root / "pyproject.toml").open("rb") as fh:
         data = tomllib.load(fh)

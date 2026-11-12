@@ -13,7 +13,7 @@ data/tmp/
 !data/prices/*
 
 # --- generated artefacts ---
-reports/
+/reports/
 artifacts/
 logs/
 *.log

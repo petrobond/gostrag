@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import get_settings  # noqa: E402
 from app.guard.rate_limit import SlidingWindowLimiter  # noqa: E402
+from app.kb.kb import KnowledgeBase  # noqa: E402
 from app.rag.service import AskService  # noqa: E402
 from app.storage.s3 import S3Store  # noqa: E402
 
@@ -26,6 +27,10 @@ hour_limiter = SlidingWindowLimiter(settings.hourly_questions_per_user, 3600)
 day_limiter = SlidingWindowLimiter(settings.daily_questions_per_user, 86400)
 service: AskService | None = None
 s3 = S3Store(settings)
+try:
+    kb: KnowledgeBase | None = KnowledgeBase()
+except (FileNotFoundError, ValueError):
+    kb = None
 
 
 class RemoteAnswerService:
@@ -99,7 +104,8 @@ async def cmd_start(message: Message) -> None:
         "Привет! Я отвечаю на вопросы по российским стандартам ИИ (ГОСТ Р / ПНСТ).\n\n"
         "Просто задайте вопрос текстом. Я приведу цитаты: ГОСТ, пункт, страницу "
         "и ссылку на PDF с переходом на нужную страницу.\n\n"
-        "Команды: /help, /gosts, /ask <вопрос>."
+        "Команды: /help, /gosts, /ask <вопрос>.\n"
+        "База знаний: /kb <ГОСТ>, /term <термин>, /links <ГОСТ>."
     )
 
 
@@ -110,13 +116,15 @@ async def cmd_help(message: Message) -> None:
         "1. Задайте вопрос по ГОСТам.\n"
         "2. Получите ответ со ссылками на пункты.\n"
         "3. Если ответа нет в корпусе — я скажу об этом.\n\n"
-        "Команды: /gosts — список стандартов, /stats — статистика (админ)."
+        "Команды: /gosts — список стандартов, /stats — статистика (админ).\n"
+        "База знаний: /kb <ГОСТ> — разделы, /term <термин> — определение, "
+        "/links <ГОСТ> — ссылки."
     )
 
 
 @dp.message(Command("gosts"))
 async def cmd_gosts(message: Message) -> None:
-    path = Path("data/corpus/documents.json")
+    path = Path(settings.data_corpus_dir) / "documents.json"
     if not path.exists():
         await message.answer("Корпус ещё не проиндексирован.")
         return
@@ -141,7 +149,7 @@ async def cmd_stats(message: Message) -> None:
     if message.from_user.id not in settings.admin_user_ids:
         await message.answer("Команда доступна только администратору.")
         return
-    path = Path("data/corpus/quality_report.json")
+    path = Path(settings.data_corpus_dir) / "quality_report.json"
     report = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     await message.answer(
         f"Документов: {report.get('documents_total', 0)}\n"
@@ -149,6 +157,74 @@ async def cmd_stats(message: Message) -> None:
         f"Чанков: {report.get('chunks', {}).get('count', 0)}\n"
         f"Версия корпуса: {report.get('corpus_version', '—')}"
     )
+
+
+@dp.message(Command("kb"))
+async def cmd_kb(message: Message) -> None:
+    if kb is None:
+        await message.answer("База знаний не загружена.")
+        return
+    query = (message.text or "").replace("/kb", "", 1).strip()
+    if not query:
+        await message.answer("Использование: /kb ГОСТ Р 71484.4—2024")
+        return
+    outline = kb.outline(query)
+    if not outline:
+        await message.answer("Стандарт не найден. Посмотрите /gosts.")
+        return
+    lines = [f"{outline['gost']}: разделы"]
+    for section in outline["sections"][:20]:
+        label = section["section"] or "—"
+        lines.append(f"• {label} {section['title'][:80]} — {len(section['clauses'])} п.")
+    for part in split_message("\n".join(lines)):
+        await message.answer(part)
+
+
+@dp.message(Command("term"))
+async def cmd_term(message: Message) -> None:
+    if kb is None:
+        await message.answer("База знаний не загружена.")
+        return
+    query = (message.text or "").replace("/term", "", 1).strip()
+    if not query:
+        await message.answer("Использование: /term граф знаний")
+        return
+    terms = kb.find_term(query)[:3]
+    if not terms:
+        await message.answer("Термин не найден в базе знаний.")
+        return
+    lines = []
+    for term in terms:
+        definition = (term.get("definition") or "").strip()
+        lines.append(
+            f"• {term['term']} — {term['gost']}, п. {term['clause']}, с. {term['page']}\n"
+            f"{definition[:500]}"
+        )
+    for part in split_message("\n\n".join(lines)):
+        await message.answer(part)
+
+
+@dp.message(Command("links"))
+async def cmd_links(message: Message) -> None:
+    if kb is None:
+        await message.answer("База знаний не загружена.")
+        return
+    query = (message.text or "").replace("/links", "", 1).strip()
+    if not query:
+        await message.answer("Использование: /links ГОСТ Р 71540—2024")
+        return
+    data = kb.neighbors(query)
+    if not data["outgoing"] and not data["incoming"]:
+        await message.answer("Связи для этого стандарта не найдены.")
+        return
+    lines = [f"{data['gost']}: связи"]
+    for edge in data["outgoing"][:20]:
+        mark = "в корпусе" if edge["internal"] else "внешний"
+        lines.append(f"→ {edge['target']} ({mark}), п. {edge['clause']}, с. {edge['page']}")
+    for edge in data["incoming"][:10]:
+        lines.append(f"← {edge['source']}, п. {edge['clause']}, с. {edge['page']}")
+    for part in split_message("\n".join(lines)):
+        await message.answer(part)
 
 
 @dp.message(Command("audit"))

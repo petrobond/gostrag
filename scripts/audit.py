@@ -39,6 +39,8 @@ ARTIFACT_FILES = (
     "docs/test_plan.md",
     "docs/trust.md",
     "docs/scope.md",
+    "docs/kb.md",
+    "docs/eval_results_v3.md",
 )
 
 

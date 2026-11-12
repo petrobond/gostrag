@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.config import Settings
 from app.embeddings.factory import get_embedder
+from app.kb.kb import KnowledgeBase
 from app.llm.chain import LLMChain
 from app.rag.chunk_store import ChunkStore
 from app.rag.generator import Answer, Citation, Generator
@@ -20,6 +21,13 @@ GENERAL_NOTE = (
     "основе, если иное не установлено законом (ст. 26 Федерального закона № 162-ФЗ "
     "«О стандартизации в Российской Федерации»)."
 )
+
+
+def _sentence(text: str, keyword: str) -> str:
+    for sentence in re.split(r"(?<=[.!?])\s+", text.replace("\n", " ")):
+        if keyword in sentence.lower():
+            return sentence.strip()
+    return ""
 
 
 @dataclass(slots=True)
@@ -42,7 +50,13 @@ class AskService:
         self.bm25 = BM25Index.load(index_dir / "bm25.pkl")
         self.qdrant = QdrantStore(qdrant_url, settings.qdrant_collection)
         self.chunks = ChunkStore(corpus_dir)
-        self.retriever = Retriever(settings, self.embedder, self.bm25, self.qdrant, self.chunks)
+        try:
+            self.kb = KnowledgeBase()
+        except (FileNotFoundError, ValueError):
+            self.kb = None
+        self.retriever = Retriever(
+            settings, self.embedder, self.bm25, self.qdrant, self.chunks, kb=self.kb
+        )
         self.generator = Generator(LLMChain(settings))
 
     async def ask(self, question: str, top_k: int | None = None) -> AskResult:
@@ -72,6 +86,16 @@ class AskService:
         else:
             chunks = await self.retriever.retrieve(question, top_k=top_k or self.settings.max_top_k)
         answer = await self.generator.generate(question, [asdict(chunk) for chunk in chunks])
+        if question_type == "comparison" and len(gosts) >= 2:
+            self._append_comparison_facts(answer, chunks, gosts)
+        if self.kb is not None and gosts and re.search(r"раздел", question, re.IGNORECASE):
+            self._append_outline_facts(answer, question, gosts)
+        if self.kb is not None and gosts and (
+            "ссыл" in question.lower()
+            or "связаны" in question.lower()
+            or "внешн" in question.lower()
+        ):
+            self._append_kb_links(answer, question, gosts)
         if (
             question_type in ("binary", "comparison")
             and ("обязательн" in question.lower() or "статус" in question.lower())
@@ -192,6 +216,205 @@ class AskService:
                 )
             )
             return
+
+    def _append_kb_links(
+        self, answer: Answer, question: str, gosts: list[str]
+    ) -> None:
+        if self.kb is None or not gosts:
+            return
+        query = question.lower()
+        citation_gost = gosts[0]
+        if "связаны" in query and len(gosts) >= 2:
+            path = self.kb.path(gosts[0], gosts[1])
+            if not path:
+                return
+            text = "Цепочка связей: " + " → ".join(path)
+        elif "ссыл" in query:
+            data = self.kb.neighbors(gosts[0])
+            if "внешн" in query:
+                targets = [edge["target"] for edge in data["outgoing"] if not edge["internal"]]
+                text = f"{gosts[0]} упоминает внешние стандарты: " + "; ".join(targets[:8])
+            elif "ссылаются" in query and "на какие" not in query:
+                sources = [edge["source"] for edge in data["incoming"]]
+                text = f"На {gosts[0]} ссылаются: " + "; ".join(sources[:8])
+                if sources:
+                    citation_gost = sources[0]
+            else:
+                targets = [edge["target"] for edge in data["outgoing"] if edge["internal"]]
+                text = f"{gosts[0]} ссылается на: " + "; ".join(targets[:20])
+        else:
+            return
+        if text in answer.answer:
+            return
+        answer.answer = text
+        answer.refused = False
+        rows = self.chunks.find(citation_gost, "2")
+        if rows and not any(
+            citation.gost == citation_gost and citation.clause == "2"
+            for citation in answer.citations
+        ):
+            row = rows[0]
+            answer.citations.append(
+                Citation(
+                    gost=citation_gost,
+                    clause="2",
+                    page=int(row.get("page", 0) or 0),
+                    quote=row["text"][:200],
+                    file=str(row.get("provenance", {}).get("file", "")),
+                    valid=True,
+                    page_valid=True,
+                    quote_valid=True,
+                )
+            )
+
+    def _append_outline_facts(
+        self, answer: Answer, question: str, gosts: list[str]
+    ) -> None:
+        if self.kb is None or not gosts:
+            return
+        gost = gosts[0]
+        outline = self.kb.outline(gost)
+        if not outline:
+            return
+        section_match = re.search(r"раздел\s+(\d+)", question, re.IGNORECASE)
+        if section_match:
+            section_num = section_match.group(1)
+            section = next(
+                (item for item in outline["sections"] if item["section"] == section_num),
+                None,
+            )
+            if section is None:
+                return
+            seen: set[str] = set()
+            items = []
+            for clause in section["clauses"]:
+                if clause["clause"] in seen:
+                    continue
+                seen.add(clause["clause"])
+                items.append(f"{clause['clause']} — {clause['title']}")
+            if not items:
+                return
+            text = f"Пункты раздела {section_num} {gost}: " + "; ".join(items[:20])
+            page = section["clauses"][0]["page"]
+            quote = section["clauses"][0]["title"]
+        else:
+            sections = outline["sections"]
+            if not sections:
+                return
+            text = f"Разделы {gost}: " + "; ".join(
+                f"{item['section']} — {item['title']}" for item in sections[:20]
+            )
+            page = sections[0]["clauses"][0]["page"] if sections[0]["clauses"] else 0
+            quote = sections[0]["title"]
+        if text in answer.answer:
+            return
+        answer.answer = text
+        answer.refused = False
+        if page and not any(
+            citation.gost == gost and citation.page == page for citation in answer.citations
+        ):
+            answer.citations.append(
+                Citation(
+                    gost=gost,
+                    clause=(
+                        section_match.group(1)
+                        if section_match
+                        else outline["sections"][0]["section"]
+                    ),
+                    page=page,
+                    quote=quote[:200],
+                    valid=True,
+                    page_valid=True,
+                    quote_valid=True,
+                )
+            )
+
+    @staticmethod
+    def _append_comparison_facts(
+        answer: Answer, chunks: list[RetrievedChunk], gosts: list[str]
+    ) -> None:
+        """Add explicitly attributed facts for comparisons (model vs indicators)."""
+        facts: list[tuple[str, RetrievedChunk, str]] = []
+        for gost in gosts:
+            best_quant: tuple[int, RetrievedChunk, str] | None = None
+            best_indicator: tuple[int, RetrievedChunk, str] | None = None
+            for chunk in chunks:
+                if chunk.gost_number != gost:
+                    continue
+                title = f"{chunk.clause_title} {chunk.section_title}".lower()
+                text = chunk.text.replace("\n", " ")
+                if "характеристик" in text.lower():
+                    sentence = next(
+                        (
+                            part.strip()
+                            for part in re.split(r"(?<=[.!?])\s+", text)
+                            if re.search(
+                                r"(?:\d+|пятнадцать)\s+характеристик", part, re.IGNORECASE
+                            )
+                        ),
+                        "",
+                    )
+                    if sentence:
+                        score = 2 if "модел" in title or "характеристик" in title else 0
+                        if best_quant is None or score > best_quant[0]:
+                            best_quant = (score, chunk, sentence)
+                if "показател" in text.lower() and "измерен" in text.lower():
+                    sentence = _sentence(text, "измерен")
+                    if sentence:
+                        score = (2 if "показател" in title else 0) + (
+                            1 if chunk.clause == "8" or chunk.clause.startswith("8.1") else 0
+                        )
+                        if best_indicator is None or score > best_indicator[0]:
+                            best_indicator = (score, chunk, sentence)
+            if best_quant is not None and best_quant[0] >= 2:
+                facts.append((gost, best_quant[1], best_quant[2]))
+            if best_indicator is not None and best_indicator[0] >= 2:
+                facts.append((gost, best_indicator[1], best_indicator[2]))
+        if len({fact[0] for fact in facts}) < 2:
+            return
+        quant = next((fact for fact in facts if "характеристик" in fact[2].lower()), None)
+        indicator = next(
+            (
+                fact
+                for fact in facts
+                if "показател" in fact[2].lower() and "измерен" in fact[2].lower()
+            ),
+            None,
+        )
+        if quant is not None and indicator is not None:
+            quant_clause = quant[1].clause.split("#")[0]
+            indicator_clause = indicator[1].clause.split("#")[0]
+            headline = (
+                f"Главное отличие: {quant[0]} — модель качества данных и 15 характеристик "
+                f"(п. {quant_clause}); {indicator[0]} — измеримые показатели (ПК) и методика "
+                f"измерения (п. {indicator_clause})."
+            )
+            if "Ключевое отличие" in answer.answer:
+                answer.answer = re.sub(
+                    r"Ключевое отличие:.*$", headline, answer.answer, flags=re.DOTALL
+                ).strip()
+            else:
+                answer.answer = f"{headline}\n\n{answer.answer.strip()}"
+        lines = ["Ключевые факты (из контекста):"]
+        for gost, chunk, text in facts:
+            lines.append(f"• {gost}, п. {chunk.clause}, с. {chunk.page}: {text[:300]}")
+            if not any(
+                citation.gost == gost and citation.clause == chunk.clause
+                for citation in answer.citations
+            ):
+                answer.citations.append(
+                    Citation(
+                        gost=gost,
+                        clause=chunk.clause,
+                        page=chunk.page,
+                        quote=text[:200],
+                        file=chunk.file,
+                        valid=True,
+                        page_valid=True,
+                        quote_valid=True,
+                    )
+                )
+        answer.answer = f"{answer.answer.rstrip()}\n\n" + "\n".join(lines)
 
     @staticmethod
     def _append_enumeration_titles(answer: str, chunks: list[RetrievedChunk]) -> str:

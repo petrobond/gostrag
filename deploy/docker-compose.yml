@@ -14,6 +14,7 @@ services:
       - ../data/source:/data/source:ro
       - ../data/corpus:/data/corpus:ro
       - ../data/index:/data/index:ro
+      - ../data/kb:/data/kb:ro
       - ./reports:/app/reports
       - fastembed_cache:/app/.cache/fastembed
     depends_on:
@@ -37,6 +38,7 @@ services:
       - ../data/source:/data/source:ro
       - ../data/corpus:/data/corpus:ro
       - ../data/index:/data/index:ro
+      - ../data/kb:/data/kb:ro
       - ./reports:/app/reports
       - fastembed_cache:/app/.cache/fastembed
     depends_on:

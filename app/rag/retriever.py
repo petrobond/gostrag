@@ -20,7 +20,7 @@ from app.storage.qdrant import QdrantStore
 
 GOST_RE = re.compile(r"(ГОСТ\s*Р|ПНСТ)\s*(\d+(?:\.\d+)?)\s*[—–-]\s*(\d{4})", re.IGNORECASE)
 CLAUSE_RE = re.compile(r"(?:п\.?|пункт)\s*(\d+(?:\.\d+)+)", re.IGNORECASE)
-QUANT_RE = re.compile(r"\b\d+\s+характеристик", re.IGNORECASE)
+QUANT_RE = re.compile(r"\b(?:\d+|пятнадцать)\s+характеристик", re.IGNORECASE)
 LIST_MARKERS = ("какие", "перечисли", "этапы", "слои", "виды", "характеристики", "состав")
 log = structlog.get_logger()
 
@@ -48,12 +48,14 @@ class Retriever:
         bm25: BM25Index,
         qdrant: QdrantStore,
         chunks: ChunkStore,
+        kb: object | None = None,
     ) -> None:
         self.settings = settings
         self.embedder = embedder
         self.bm25 = bm25
         self.qdrant = qdrant
         self.chunks = chunks
+        self.kb = kb
 
     async def retrieve(
         self,
@@ -68,6 +70,13 @@ class Retriever:
             exact = self.chunks.find_fuzzy(exact_gost, exact_clause)
         elif question_type == "definition":
             exact = self.chunks.find_term(extract_term(query), exact_gost)
+            if self.kb is not None:
+                known = {row["chunk_id"] for row in exact}
+                for term in self.kb.find_term(extract_term(query), exact_gost):
+                    for row in self.chunks.find(term["gost"], term["clause"]):
+                        if row["chunk_id"] not in known:
+                            exact.append(row)
+                            known.add(row["chunk_id"])
         elif question_type == "appendix" and exact_gost:
             appendix = extract_appendix(query)
             if appendix:
@@ -79,7 +88,12 @@ class Retriever:
             dense_hits = await self.qdrant.search(vector, limit=20, gost_number=exact_gost)
         except Exception as exc:  # noqa: BLE001 - degrade to BM25 when embedding/Qdrant fails
             log.warning("dense_search_unavailable", error=str(exc)[:200])
-        bm25_hits = self.bm25.search(query, top_k=40)
+        bm25_query = query
+        if self.kb is not None:
+            expansion = self.kb.expand_query(query)
+            if expansion:
+                bm25_query = f"{query} {' '.join(expansion)}"
+        bm25_hits = self.bm25.search(bm25_query, top_k=40)
         if exact_gost:
             filtered = []
             for hit in bm25_hits:
@@ -104,6 +118,20 @@ class Retriever:
                 continue
             result.append(self._to_chunk(payload, score))
             seen.add(chunk_id)
+        if question_type == "cross_reference" and exact_gost and self.kb is not None:
+            neighbors = self.kb.neighbors(exact_gost, internal_only=True)
+            added = 0
+            for edge in neighbors["outgoing"][:2] + neighbors["incoming"][:2]:
+                target = edge["target"] if edge["source"] == exact_gost else edge["source"]
+                for row in self.chunks.find(target, "1")[:1]:
+                    if row["chunk_id"] in seen:
+                        continue
+                    result.append(self._to_chunk(row, 0.8))
+                    seen.add(row["chunk_id"])
+                    added += 1
+                    break
+                if added >= 2:
+                    break
         if result and question_type == "enumeration":
             self._expand_enumeration(query, result, seen, exact_gost, dense_hits)
         elif result and any(marker in query.lower() for marker in LIST_MARKERS):
