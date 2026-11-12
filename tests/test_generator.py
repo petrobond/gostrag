@@ -37,6 +37,11 @@ def test_parse_double_encoded_json():
     assert _parse_json(payload)["answer"] == "ok"
 
 
+def test_parse_json_with_literal_newlines():
+    payload = '{"answer": "line1\nline2", "refused": false}'
+    assert _parse_json(payload)["answer"] == "line1\nline2"
+
+
 def test_parse_invalid_returns_empty():
     assert _parse_json("не json") == {}
 

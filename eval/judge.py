@@ -60,7 +60,7 @@ def _parse_json(text: str) -> dict:
     end = text.rfind("}")
     if start >= 0 and end > start:
         try:
-            return json.loads(text[start : end + 1])
+            return json.loads(text[start : end + 1], strict=False)
         except json.JSONDecodeError:
             pass
     # Recover malformed judge output like {"verdict":"pass":""}.

@@ -95,12 +95,12 @@ def _parse_json(text: str) -> dict:
         candidates.append(match.group(0))
     for candidate in candidates:
         try:
-            data = json.loads(candidate)
+            data = json.loads(candidate, strict=False)
         except json.JSONDecodeError:
             continue
         if isinstance(data, str):
             try:
-                data = json.loads(data)
+                data = json.loads(data, strict=False)
             except json.JSONDecodeError:
                 continue
         if isinstance(data, dict):
