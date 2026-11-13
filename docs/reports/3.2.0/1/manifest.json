@@ -1,0 +1,19 @@
+{
+  "product_version": "3.2.0",
+  "git_commit": "82e0c8f641a84421ff89d9794b8dec99db06628a",
+  "git_tag": "v3.1.0-1-g82e0c8f",
+  "user_id": 1,
+  "judge_model": "GigaChat-3-Ultra",
+  "generated_at": "2026-11-13T12:54:21.679500+00:00",
+  "requirements_total": 157,
+  "not_applicable": 15,
+  "applicable_total": 142,
+  "coverage": 0.9044585987261147,
+  "compliance_all": 0.6751592356687898,
+  "compliance_applicable": 0.7464788732394366,
+  "compliance_rate": 0.6751592356687898,
+  "md_path": "docs/reports/3.2.0/1/audit.md",
+  "json_path": "docs/reports/3.2.0/1/audit.json",
+  "md_sha256": "e9a4683e48e017ab472b42f2eb7956b9afb43d6554085f21036ebb063300de15",
+  "json_sha256": "ba413034443d62ea8a175a0cd7c02f926bf7a47e651af6e1cfb79101362cb664"
+}

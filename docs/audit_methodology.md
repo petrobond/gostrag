@@ -38,6 +38,22 @@
 - Ограничение длины доказательства.
 - Двойной прогон при confidence < 0.6.
 - Калибровка на 20 примерах вручную (план).
+
+## 6. Applicability и метрики v3.2
+
+Каждое требование имеет `applicability` (`applicable` / `not_applicable`) и
+`applicability_reason`. Неприменимые требования фиксируются детерминированно и
+не отправляются judge; judge не может перевести применимое требование в N/A
+(неизвестный статус → partial).
+
+- `coverage = (compliant + partial + non_compliant) / total`;
+- `compliance_all = compliant / total`;
+- `compliance_applicable = compliant / (total - not_applicable)` — основная метрика;
+- N/A — только с reason; цель N/A ≤15%, coverage ≥90%.
+
+Runtime-доказательства: `docs/audit_evidence.md` (pytest, ruff, health, KB,
+gold-метрики, контейнеры). Отчёт — `docs/reports/<version>/<user_id>/`.
+
 - Фиксация модели judge в manifest.
 
 ## 6. Ограничения
