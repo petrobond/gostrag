@@ -13,8 +13,5 @@ dist
 .local
 secrets
 tests
-scripts
-eval
-docs
 plans
 deploy/reports

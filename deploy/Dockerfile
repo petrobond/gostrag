@@ -29,7 +29,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     EMBEDDING_CACHE_DIR=/app/.cache/fastembed
 
-ARG APP_VERSION=3.1.0
+ARG APP_VERSION=3.2.0
 ARG GIT_COMMIT=""
 ENV APP_VERSION=${APP_VERSION} \
     GIT_COMMIT=${GIT_COMMIT}
@@ -53,6 +53,9 @@ RUN if [ "$INSTALL_LOCAL_EMBEDDINGS" = "true" ]; then \
 
 COPY app ./app
 COPY bot ./bot
+COPY scripts ./scripts
+COPY eval/requirements.yaml ./eval/requirements.yaml
+COPY docs ./docs
 
 RUN mkdir -p /app/reports /data/source /data/corpus /data/index /data/kb /app/.cache/fastembed
 

@@ -20,12 +20,16 @@ from app.guard.rate_limit import SlidingWindowLimiter  # noqa: E402
 from app.kb.kb import KnowledgeBase  # noqa: E402
 from app.rag.service import AskService  # noqa: E402
 from app.storage.s3 import S3Store  # noqa: E402
+from app.storage.usage import UsageStore  # noqa: E402
 
 settings = get_settings()
 dp = Dispatcher()
 hour_limiter = SlidingWindowLimiter(settings.hourly_questions_per_user, 3600)
 day_limiter = SlidingWindowLimiter(settings.daily_questions_per_user, 86400)
 service: AskService | None = None
+usage: UsageStore | None = None
+audit_tasks: dict[int, asyncio.subprocess.Process] = {}
+APP_DIR = Path(__file__).resolve().parents[1]
 s3 = S3Store(settings)
 try:
     kb: KnowledgeBase | None = KnowledgeBase()
@@ -149,6 +153,19 @@ async def cmd_stats(message: Message) -> None:
     if message.from_user.id not in settings.admin_user_ids:
         await message.answer("Команда доступна только администратору.")
         return
+    if usage is not None:
+        try:
+            stats = await usage.stats(days=30)
+            await message.answer(
+                f"Вопросов: {stats.get('questions', 0)}\n"
+                f"Отказов: {stats.get('refusals', 0)}\n"
+                f"Пользователей: {stats.get('users', 0)}\n"
+                f"p50 / p95: {stats.get('p50', 0)} / {stats.get('p95', 0)} мс\n"
+                f"Токены: {stats.get('tokens_in', 0)} / {stats.get('tokens_out', 0)}"
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            await message.answer(f"Статистика PostgreSQL недоступна: {exc.__class__.__name__}")
     path = Path(settings.data_corpus_dir) / "quality_report.json"
     report = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     await message.answer(
@@ -227,12 +244,84 @@ async def cmd_links(message: Message) -> None:
         await message.answer(part)
 
 
+def _audit_summary(manifest_path: Path) -> str:
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return (
+        f"Аудит {data.get('product_version')} готов:\n"
+        f"Coverage: {float(data.get('coverage', 0)):.1%}\n"
+        f"Compliance (применимые): {float(data.get('compliance_applicable', 0)):.1%}\n"
+        f"Требований: {data.get('requirements_total')}\n"
+        f"Файл: {data.get('md_path')}"
+    )
+
+
+async def _notify_audit(
+    chat_id: int,
+    bot: Bot,
+    user_id: int,
+    process: asyncio.subprocess.Process,
+    manifest_path: Path,
+) -> None:
+    output, _ = await process.communicate()
+    audit_tasks.pop(user_id, None)
+    if process.returncode == 0 and manifest_path.exists():
+        try:
+            text = _audit_summary(manifest_path)
+        except Exception:  # noqa: BLE001
+            text = "Аудит завершён, но manifest.json не прочитан."
+    else:
+        tail = output.decode(errors="ignore")[-800:]
+        text = f"Аудит завершился ошибкой (код {process.returncode}).\n{tail}"
+    await bot.send_message(chat_id=chat_id, text=text[:4000])
+
+
 @dp.message(Command("audit"))
 async def cmd_audit(message: Message) -> None:
-    if message.from_user.id not in settings.admin_user_ids:
-        await message.answer("Команда доступна только администратору.")
+    user_id = message.from_user.id
+    allowed = settings.allowed_user_ids | settings.admin_user_ids
+    if user_id not in allowed:
+        await message.answer("Команда доступна только whitelist/администратору.")
         return
-    await message.answer("Аудит ГОСТ будет реализован на этапе 8 плана.")
+    manifest_path = Path(settings.reports_dir) / settings.app_version / str(user_id) / "manifest.json"
+    if manifest_path.exists():
+        await message.answer(_audit_summary(manifest_path))
+        return
+    process = audit_tasks.get(user_id)
+    if process is not None and process.returncode is None:
+        await message.answer("Аудит уже выполняется.")
+        return
+    await message.answer("Запускаю аудит ГОСТов. Это займёт несколько минут.")
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "scripts/audit.py",
+        "--requirements",
+        "eval/requirements.yaml",
+        "--reports",
+        settings.reports_dir,
+        "--user-id",
+        str(user_id),
+        cwd=str(APP_DIR),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    audit_tasks[user_id] = process
+    asyncio.create_task(
+        _notify_audit(message.chat.id, message.bot, user_id, process, manifest_path)
+    )
+
+
+@dp.message(Command("audit_status"))
+async def cmd_audit_status(message: Message) -> None:
+    user_id = message.from_user.id
+    manifest_path = Path(settings.reports_dir) / settings.app_version / str(user_id) / "manifest.json"
+    if manifest_path.exists():
+        await message.answer(_audit_summary(manifest_path))
+        return
+    process = audit_tasks.get(user_id)
+    if process is not None and process.returncode is None:
+        await message.answer("Аудит выполняется.")
+        return
+    await message.answer("Аудит для этой версии ещё не запускался.")
 
 
 @dp.message(Command("ask"))
@@ -269,6 +358,29 @@ async def handle_question(message: Message, question: str) -> None:
     placeholder = await message.answer("⏳ Ищу в ГОСТах…")
     try:
         result = await service.ask(question)
+        if usage is not None:
+            try:
+                answer = result.answer
+                await usage.log(
+                    user_id,
+                    question,
+                    str(getattr(answer, "answer", "")),
+                    [
+                        {
+                            "gost": getattr(citation, "gost", ""),
+                            "clause": getattr(citation, "clause", ""),
+                            "page": getattr(citation, "page", 0),
+                        }
+                        for citation in getattr(answer, "citations", [])
+                    ],
+                    bool(getattr(answer, "refused", False)),
+                    int(getattr(result, "latency_ms", 0) or 0),
+                    str(getattr(answer, "model", "")),
+                    int(getattr(answer, "tokens_in", 0) or 0),
+                    int(getattr(answer, "tokens_out", 0) or 0),
+                )
+            except Exception:  # noqa: BLE001 - usage must not break answers
+                pass
         text = format_answer(result)
     except Exception as exc:  # noqa: BLE001
         text = html.escape(f"Ошибка при обработке вопроса: {exc.__class__.__name__}")
@@ -279,7 +391,7 @@ async def handle_question(message: Message, question: str) -> None:
 
 
 async def main() -> None:
-    global service
+    global service, usage
     api_url = settings.ask_api_url.strip()
     if api_url:
         service = RemoteAnswerService(api_url)
@@ -290,6 +402,11 @@ async def main() -> None:
             Path(os.getenv("INDEX_DIR", "data/index")),
             settings.qdrant_url,
         )
+    usage = UsageStore(settings.postgres_dsn)
+    try:
+        await usage.connect()
+    except Exception:  # noqa: BLE001 - bot works without usage DB
+        usage = None
     bot = Bot(token=settings.telegram_bot_token)
     await dp.start_polling(bot)
 
