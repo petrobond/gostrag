@@ -2,9 +2,21 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.kb.kb import KnowledgeBase
-from app.rag.chunk_store import ChunkStore
 from app.rag.generator import Answer
 from app.rag.service import AskService
+
+
+class FakeChunks:
+    def find(self, gost: str, clause: str) -> list[dict]:
+        if gost == "ГОСТ Р 71562—2024" and clause == "2":
+            return [
+                {
+                    "text": "2 Нормативные ссылки. В настоящем стандарте использованы ссылки.",
+                    "page": 5,
+                    "provenance": {"file": "gost-r-71562-2024.pdf"},
+                }
+            ]
+        return []
 
 
 def kb() -> KnowledgeBase:
@@ -68,7 +80,7 @@ def test_external_links_intent_and_deterministic_answer():
 
     service = SimpleNamespace(
         kb=kb(),
-        chunks=ChunkStore(Path("data/corpus")),
+        chunks=FakeChunks(),
         _is_external_links_question=AskService._is_external_links_question,
     )
     answer = Answer(answer="Ответ LLM")
