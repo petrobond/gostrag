@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import defaultdict
 from pathlib import Path
 
 TOKEN_RE = re.compile(r"[а-яёa-z0-9]+", re.IGNORECASE)
@@ -71,6 +72,7 @@ class ChunkStore:
     def __init__(self, corpus_dir: Path) -> None:
         self.by_id: dict[str, dict] = {}
         self.by_key: dict[tuple[str, str], dict] = {}
+        self.by_clause: dict[tuple[str, str], list[dict]] = defaultdict(list)
         self.by_gost: dict[str, list[dict]] = {}
         self.by_doc: dict[str, list[dict]] = {}
         self.by_section: dict[tuple[str, str], list[dict]] = {}
@@ -95,6 +97,7 @@ class ChunkStore:
             row = merged[chunk_id]
             self.by_id[row["chunk_id"]] = row
             self.by_key[(row["gost_number"], row["clause"])] = row
+            self.by_clause[(row["gost_number"], row["clause"])].append(row)
             self.by_gost.setdefault(row["gost_number"], []).append(row)
             self.by_doc.setdefault(row["doc_id"], []).append(row)
             self.by_section.setdefault((row["doc_id"], row.get("section", "")), []).append(row)
@@ -116,15 +119,16 @@ class ChunkStore:
         return []
 
     def find_fuzzy(self, gost_number: str, clause: str) -> list[dict]:
-        """Match by normalized GOST number and clause prefix (6.2.5 -> 6.2.5, 6.2.5.1, 6.2.5#p1)."""
+        """Match by clause prefix, preserving every split part of a clause."""
         norm = _norm_gost(gost_number)
         matches = [
             row
-            for (gost, cl), row in self.by_key.items()
+            for (gost, cl), rows in self.by_clause.items()
             if _norm_gost(gost) == norm
             and (cl == clause or cl.startswith(clause + ".") or cl.startswith(clause + "#"))
+            for row in rows
         ]
-        return sorted(matches, key=lambda row: row["clause"])[:3]
+        return sorted(matches, key=lambda row: (row["clause"], row["chunk_id"]))[:3]
 
     def find_term(self, term: str, gost_number: str | None = None, limit: int = 3) -> list[dict]:
         """Find definition chunks whose clause title matches the term stems."""

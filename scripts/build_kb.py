@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -146,8 +146,9 @@ def clause_key(clause: str) -> tuple:
 
 def build_outline(rows: list[dict]) -> dict[str, dict]:
     outline: dict[str, dict] = {}
+    seen: set[tuple[str, str]] = set()
     for row in rows:
-        if row.get("chunk_type", "clause") not in ("clause", "meta"):
+        if row.get("chunk_type", "clause") != "clause":
             continue
         gost = row["gost_number"]
         doc = outline.setdefault(
@@ -155,6 +156,10 @@ def build_outline(rows: list[dict]) -> dict[str, dict]:
             {"gost": gost, "doc_id": row["doc_id"], "sections": {}},
         )
         clause = row.get("clause", "")
+        dedupe_key = (gost, clause)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
         section_raw = row.get("section", "") or "0"
         if section_raw.lower().startswith("приложение"):
             section = section_raw
@@ -162,12 +167,20 @@ def build_outline(rows: list[dict]) -> dict[str, dict]:
             section = clause.split(".")[0]
         else:
             section = section_raw
-        section_title = row.get("section_title", "") or "Без раздела"
+        section_title = row.get("section_title", "").strip()
+        if not section_title:
+            section_title = (
+                f"Приложение {section.removeprefix('Приложение ').strip()}"
+                if section.lower().startswith("приложение")
+                else f"Раздел {section}"
+            )
         bucket = doc["sections"].setdefault(
             section, {"section": section, "title": section_title, "clauses": []}
         )
         if clause == section and row.get("clause_title"):
             bucket["title"] = row["clause_title"]
+        elif not bucket["title"]:
+            bucket["title"] = section_title
         bucket["clauses"].append(
             {
                 "clause": row["clause"],

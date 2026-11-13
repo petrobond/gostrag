@@ -36,6 +36,16 @@ def make_corpus(tmp_path: Path) -> ChunkStore:
             "page": 10,
             "text": "Актуальность данных",
         },
+        {
+            "chunk_id": "doc2#6.2.5.1#p2",
+            "doc_id": "doc2",
+            "gost_number": "ГОСТ Р 71484.2—2024",
+            "clause": "6.2.5.1",
+            "section": "6",
+            "section_title": "Качество",
+            "page": 10,
+            "text": "Связь с дрейфом данных",
+        },
     ]
     with (tmp_path / "chunks.jsonl").open("w", encoding="utf-8") as fh:
         for row in rows:
@@ -53,8 +63,10 @@ def test_find_fuzzy_exact(tmp_path):
 def test_find_fuzzy_prefix(tmp_path):
     store = make_corpus(tmp_path)
     found = store.find_fuzzy("ГОСТ Р 71484.2—2024", "6.2.5")
-    assert len(found) == 1
-    assert found[0]["clause"] == "6.2.5.1"
+    assert len(found) == 2
+    assert [row["clause"] for row in found] == ["6.2.5.1", "6.2.5.1"]
+    assert found[0]["chunk_id"] == "doc2#6.2.5.1"
+    assert found[1]["chunk_id"] == "doc2#6.2.5.1#p2"
 
 
 def test_section_chunks_sorted(tmp_path):

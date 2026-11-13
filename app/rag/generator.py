@@ -10,7 +10,8 @@ from app.rag.prompts import SYSTEM_PROMPT, USER_TEMPLATE, format_documents
 JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 WS_RE = re.compile(r"\s+")
 CLAUSE_IN_TEXT_RE = re.compile(r"(\d+(?:\.\d+){1,4})")
-APPENDIX_IN_TEXT_RE = re.compile(r"приложение\s+([А-ЯA-Z]{1,2})", re.IGNORECASE)
+APPENDIX_CLAUSE_IN_TEXT_RE = re.compile(r"\b([A-ZА-ЯЁ]\.\d+(?:\.\d+)*)\b")
+APPENDIX_IN_TEXT_RE = re.compile(r"приложение\s+([А-ЯA-ZЁ]{1,2})", re.IGNORECASE)
 GOST_SEP_RE = re.compile(r"[\s—–-]+")
 
 
@@ -24,6 +25,9 @@ def _norm_gost(value: str) -> str:
 
 def _clause_key(value: str) -> str:
     """Extract a clause number or appendix letter from free-form model output."""
+    appendix_clause = APPENDIX_CLAUSE_IN_TEXT_RE.search(value or "")
+    if appendix_clause:
+        return appendix_clause.group(1)
     appendix = APPENDIX_IN_TEXT_RE.search(value or "")
     if appendix:
         return f"Приложение {appendix.group(1).upper()}"

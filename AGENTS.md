@@ -29,10 +29,11 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
 
 - `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст
 - `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready)
-- версия продукта: **3.2.1** (pyproject = APP_VERSION = `/health`)
+- версия продукта: **3.2.2** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
-- Qdrant — коллекция `gost_chunks_bge_m3_v2` (прод, 4396 точек); `gost_chunks_bge_m3` (4452, старая) и `gost_chunks` (e5) — rollback, v1.12.4
+- Qdrant — коллекция `gost_chunks_bge_m3_v3` (BGE-M3, 4446 точек, корпус
+  2026.11.13-r2); `gost_chunks_bge_m3_v2` (4396) и `gost_chunks_bge_m3` — rollback
 - KB/граф — `app/kb`, `data/kb`: 400 терминов, 97 узлов (37 корпусных + 60 внешних),
   116 рёбер (24 внутренних); команды `/kb`, `/term`, `/links`; 1-hop для cross_reference
 - Postgres 16 и Redis 7 — в compose; usage пишется в PG (`qa_log`, `usage_daily`), `/stats`
@@ -76,14 +77,14 @@ VPS (ultraVDS):
 
 ## 6. Данные и индексы
 
-- корпус: 38 документов, 4791 чанк (3825 clause + 928 table + 38 meta)
-- уникальных по `text_hash`: 4643; уникальных `uuid5(chunk_id)`: 4452
-- Qdrant: `gost_chunks_bge_m3` (прод) и `gost_chunks` (e5, rollback) — по 4452 точки,
-  id = `uuid5(chunk_id)`, payload = чанк целиком
+- корпус: 38 документов, 4657 чанк (3759 clause + 860 table + 38 meta)
+- уникальных по `text_hash`: 4495; уникальных `uuid5(chunk_id)`: 4608
+- Qdrant: `gost_chunks_bge_m3_v3` (прод/локально, BGE-M3), `gost_chunks_bge_m3_v2`
+  и `gost_chunks_bge_m3` — rollback; id = `uuid5(chunk_id)`, payload = чанк целиком
 - KB: `data/kb/terms.jsonl` (400), `graph.json` (97 узлов / 116 рёбер), `outline.json` (37 стандартов)
 - BM25: `data/index/bm25.pkl` (~6.5 МБ), не зависит от модели эмбеддингов
 - переиндексация BGE-M3 на VPS: 150 с (31 чанк/с), стоимость ~0.74 ₽
-- артефакты данных: `dist/data-<corpus_version>.tar.zst` + `manifest.json`, S3 `data/`
+- артефакты данных: `dist/data-<corpus_version>.tar.gz` + `manifest-*.json`, S3 `data/`
 - BM25 обновляется тем же `embed`; путь `/data/index`, а не `/tmp/index`
 
 ## 7. Команды
@@ -91,7 +92,7 @@ VPS (ultraVDS):
 Локально:
 
 ```bash
-.venv/bin/python -m pytest -q tests          # 65 тестов
+.venv/bin/python -m pytest -q tests          # 89 тестов
 .venv/bin/python -m ruff check app bot eval tests
 .venv/bin/python scripts/net_matrix.py        # сеть: Telegram, VPS, Cloud.ru, GigaChat
 .venv/bin/python scripts/ask.py "вопрос"
@@ -162,12 +163,13 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 
 ## 9. Тесты и метрики (v3.2, BGE-M3)
 
-- `pytest`: **80 passed**; ruff clean (app bot eval tests)
+- `pytest`: **89 passed**; ruff clean (app bot eval tests)
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **1.000 (50/50)**,
   faithfulness/relevancy 0.96/0.96, citation 1.0, citation recall **1.000 (58/58)**;
-  M04, X01, TB01, KB10 — pass
+  M04, X01, TB01, KB10 — pass; v3.2.2 retrieval 1.0, judge 47/50
+  (E04/M04/CL02 — strict-judge outliers, C05 исправлен split-part lookup)
 - gold-KB (10): **1.000 (10/10)**, citation **28/28** (v3.2.1); KB07 —
   «стандарты корпуса» → внутренняя ветка 71476, п. 2
 - audit v3.2: **157 требований / 15 ГОСТов**, N/A 15 (9.55%), coverage **90.45%**,
@@ -196,6 +198,9 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 - M04/TB01/KB10/X01: закрыты; gold v3 **50/50** (v3.2.0)
 - KB07: в v3.2.0 external-links перехватывал «стандарты корпуса» и отдавал
   внешние ГОСТы; в v3.2.1 — внутренняя ветка графа (71476, п. 2)
+- v3.2.2: `/kb` для 72664 исправлен — разделы 4/5, приложения A/B/C/ДА/ДБ,
+  letter-подпункты A.1/C.1, дедупликация outline; ложные разделы 5/6 из таблицы
+  приложения ДБ больше не появляются
 - deploy: `data/kb` после root-контейнера не давал `git checkout`; добавлен
   chown `data/*` перед checkout (коммит 56bee3e, входит в v3.2.1)
 - reranker отклонён по результатам A/B (ухудшает recall/top1)
@@ -213,7 +218,8 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 11. релиз
 
 Релизы: `v3.1.0` (TB01, KB10, инфраструктура), `v3.2.0` (аудит + `/audit`),
-`v3.2.1` (KB07 «стандарты корпуса», deploy chown).
+`v3.2.1` (KB07 «стандарты корпуса», deploy chown), `v3.2.2` (структура `/kb`,
+outline и corpus `2026.11.13-r2`).
 
 ## 12. Чек-лист приёмки этапа 0
 

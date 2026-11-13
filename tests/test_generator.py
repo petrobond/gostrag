@@ -17,6 +17,13 @@ CHUNKS = [
         "page": 50,
         "text": "Текст приложения",
     },
+    {
+        "gost_number": "ГОСТ Р 59926—2021",
+        "clause": "A.1",
+        "clause_title": "Структура комплекса",
+        "page": 50,
+        "text": "Текст подпункта A.1",
+    },
 ]
 
 
@@ -56,6 +63,12 @@ def test_resolve_clause_number_with_prefix():
     chunk = _resolve_chunk(CHUNKS, "ГОСТ Р 72663-2026", "пункт 8.2, страница 17", "")
     assert chunk is not None
     assert chunk["clause"] == "8.2"
+
+
+def test_resolve_appendix_subclause():
+    chunk = _resolve_chunk(CHUNKS, "ГОСТ Р 59926—2021", "A.1", "")
+    assert chunk is not None
+    assert chunk["clause"] == "A.1"
 
 
 def test_resolve_by_quote():

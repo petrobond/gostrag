@@ -35,17 +35,17 @@
 
 | Variable | Значение | Назначение |
 |---|---|---|
-| `DATA_VERSION` | (пусто) | если задан — скачать data-артефакт и переиндексировать; текущие данные уже на VPS |
-| `QDRANT_COLLECTION` | `gost_chunks_bge_m3_v2` | новая коллекция после переиндексации |
-| `CORPUS_VERSION` | `2026.11.13` | версия корпуса в `/health` и отчётах |
+| `DATA_VERSION` | `2026.11.13-r2` | скачать data-артефакт и переиндексировать |
+| `QDRANT_COLLECTION` | `gost_chunks_bge_m3_v3` | новая коллекция после переиндексации |
+| `CORPUS_VERSION` | `2026.11.13-r2` | версия корпуса в `/health` и отчётах |
 
 Устанавливаются владельцем:
 
 ```bash
 # только при необходимости обновить данные:
-# gh variable set DATA_VERSION -R petrobond/gostrag --body 2026.11.13
-gh variable set QDRANT_COLLECTION -R petrobond/gostrag --body gost_chunks_bge_m3_v2
-gh variable set CORPUS_VERSION -R petrobond/gostrag --body 2026.11.13
+# gh variable set DATA_VERSION -R petrobond/gostrag --body 2026.11.13-r2
+gh variable set QDRANT_COLLECTION -R petrobond/gostrag --body gost_chunks_bge_m3_v3
+gh variable set CORPUS_VERSION -R petrobond/gostrag --body 2026.11.13-r2
 gh variable list -R petrobond/gostrag
 ```
 

@@ -1,9 +1,11 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+from app.kb.formatting import format_outline
 from app.kb.kb import KnowledgeBase
 from app.rag.generator import Answer, Citation
 from app.rag.service import AskService
+from scripts.build_kb import build_outline
 
 
 class FakeChunks:
@@ -133,3 +135,88 @@ def test_external_links_intent_and_deterministic_answer():
     assert answer.citations[0].gost == "ГОСТ Р 71562—2024"
     assert answer.citations[0].clause == "2"
     assert answer.citations[0].page == 5
+
+
+def test_build_outline_deduplicates_chunks_and_skips_meta():
+    rows = [
+        {
+            "chunk_type": "meta",
+            "gost_number": "ГОСТ Р 1—2024",
+            "doc_id": "doc",
+            "clause": "meta",
+            "section": "",
+            "section_title": "Титульный лист",
+            "clause_title": "Сведения о документе",
+            "page": 1,
+            "chunk_id": "doc#meta",
+        },
+        {
+            "chunk_type": "clause",
+            "gost_number": "ГОСТ Р 1—2024",
+            "doc_id": "doc",
+            "clause": "4",
+            "section": "4",
+            "section_title": "Модель качества продукта",
+            "clause_title": "Модель качества продукта",
+            "page": 7,
+            "chunk_id": "doc#4",
+        },
+        {
+            "chunk_type": "clause",
+            "gost_number": "ГОСТ Р 1—2024",
+            "doc_id": "doc",
+            "clause": "4.1",
+            "section": "4",
+            "section_title": "Модель качества продукта",
+            "clause_title": "Общие положения",
+            "page": 7,
+            "chunk_id": "doc#4.1",
+        },
+        {
+            "chunk_type": "clause",
+            "gost_number": "ГОСТ Р 1—2024",
+            "doc_id": "doc",
+            "clause": "4.1",
+            "section": "4",
+            "section_title": "Модель качества продукта",
+            "clause_title": "Общие положения",
+            "page": 7,
+            "chunk_id": "doc#4.1#p2",
+        },
+    ]
+    outline = build_outline(rows)["ГОСТ Р 1—2024"]
+    assert [section["section"] for section in outline["sections"]] == ["4"]
+    assert len(outline["sections"][0]["clauses"]) == 2
+    assert "Титульный лист" not in format_outline(outline)
+
+
+def test_outline_72664_matches_pdf_structure():
+    outline = kb().outline("ГОСТ Р 72664—2026")
+    assert outline is not None
+    text = format_outline(outline)
+    assert "• 1 Область применения — 1 п." in text
+    assert "• 2 Нормативные ссылки — 1 п." in text
+    assert "• 3 Термины и определения — 9 п." in text
+    assert "• 4 Модель качества продукта — 7 п." in text
+    assert "• 5 Модель качества при использовании системы ИИ — 3 п." in text
+    assert "• Приложение A Требования к качеству систем и программного обеспечения SQuaRE — 1 п." in text
+    assert "• Приложение B Производительность — 1 п." in text
+    assert "• Приложение C Сравнение рискориентированного подхода с качествоориентированным подходом и с моделями качества — 3 п." in text
+    assert "Без раздела" not in text
+    assert "6 Модель" not in text
+    assert "0 Титульный лист" not in text
+    assert "(раз" not in text
+
+
+def test_ask_outline_facts_do_not_contain_fake_section_six():
+    service = SimpleNamespace(kb=kb())
+    answer = Answer(answer="")
+    AskService._append_outline_facts(
+        service,
+        answer,
+        "Какие разделы у ГОСТ Р 72664—2026?",
+        ["ГОСТ Р 72664—2026"],
+    )
+    assert "4 — Модель качества продукта" in answer.answer
+    assert "5 — Модель качества при использовании системы ИИ" in answer.answer
+    assert "6 —" not in answer.answer

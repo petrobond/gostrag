@@ -56,13 +56,26 @@ def is_service_text(text: str) -> bool:
     return any(p.search(normalized) for p in SERVICE_PATTERNS)
 
 
-def is_noise_text(text: str) -> bool:
-    """Single letters and punctuation left after watermark removal."""
+def is_noise_text(text: str, span: Span | None = None) -> bool:
+    """Single letters and punctuation left after watermark removal.
+
+    Single digits and uppercase appendix labels are structural tokens:
+    Rosstandart PDFs often store the section number (``4``) or the appendix
+    letter (``B``) as a separate span.  Dropping them breaks heading parsing.
+    """
     normalized = normalize_text(text)
     if not normalized:
         return True
     if len(normalized) == 1:
-        return True
+        if normalized.isdigit():
+            return False
+        return not (
+            span is not None
+            and normalized.isupper()
+            and normalized.isalpha()
+            and span.size >= 9
+            and span.bbox[1] <= 200
+        )
     return len(normalized) <= 3 and normalized.isupper() and normalized.isalpha()
 
 
@@ -87,7 +100,9 @@ def clean_pages(pages: list[PageSpans]) -> list[PageSpans]:
     """Remove watermarks, service stamps and noise spans."""
     cleaned: list[PageSpans] = []
     for page in pages:
-        kept = [s for s in page.spans if not should_drop(s) and not is_noise_text(s.text)]
+        kept = [
+            s for s in page.spans if not should_drop(s) and not is_noise_text(s.text, s)
+        ]
         cleaned.append(
             PageSpans(page=page.page, width=page.width, height=page.height, spans=kept)
         )

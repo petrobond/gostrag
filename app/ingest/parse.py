@@ -9,7 +9,9 @@ from app.ingest.extract import TableBlock, extract_pdf, extract_tables
 
 CLAUSE_RE = re.compile(r"^(\d+(?:\.\d+){1,4})\s+(.+)$")
 SECTION_RE = re.compile(r"^(\d{1,2})\s+([А-ЯЁ][^.]{2,90})$")
-APPENDIX_RE = re.compile(r"^Приложение\s+([А-ЯA-Z]{1,2})\b(.*)$")
+APPENDIX_RE = re.compile(r"^Приложение\s+([А-ЯA-ZЁ]{1,2})\b(.*)$")
+APPENDIX_STATUS_RE = re.compile(r"^\((?:справочное|обязательное)\)\s*", re.IGNORECASE)
+APPENDIX_CLAUSE_RE = re.compile(r"^([A-ZА-ЯЁ]\.\d+(?:\.\d+)*)\s+(.+)$")
 TOC_RE = re.compile(r"\.\s*\.\s*\.")
 PAGE_NUM_RE = re.compile(r"^\d{1,4}$")
 PENDING_CLAUSE_RE = re.compile(r"^(\d+(?:\.\d+){1,4})$")
@@ -83,6 +85,75 @@ def _join(acc: str, line: str) -> str:
     if acc.endswith(("\u00ad", "-")) and line[:1].islower():
         return acc[:-1] + line
     return f"{acc} {line}"
+
+
+def _is_meaningful_table(block: TableBlock) -> bool:
+    """Reject watermark/logo regions that pdfplumber sometimes treats as tables."""
+    if not block.rows:
+        return False
+    width = max((len(row) for row in block.rows), default=0)
+    if width < 2:
+        return False
+    meaningful_rows = sum(
+        1 for row in block.rows if sum(bool(cell.strip()) for cell in row) >= 2
+    )
+    return meaningful_rows >= 2
+
+
+def _inside_table(
+    line: Line, table_boxes: list[tuple[int, tuple[float, float, float, float]]]
+) -> bool:
+    if not table_boxes:
+        return False
+    x = (line.bbox[0] + line.bbox[2]) / 2
+    y = (line.bbox[1] + line.bbox[3]) / 2
+    return any(
+        page == line.page and box[0] <= x <= box[2] and box[1] <= y <= box[3]
+        for page, box in table_boxes
+    )
+
+
+def _appendix_heading(lines: list[Line], idx: int) -> tuple[str, str, int] | None:
+    """Parse a multi-line appendix heading.
+
+    Rosstandart PDFs put ``Приложение B``, ``(справочное)`` and the title on
+    separate lines.  Returning the next unconsumed line index lets the caller
+    skip the status/title lines instead of appending them to the first clause.
+    """
+    line = lines[idx]
+    if line.bbox[1] > 220:
+        return None
+    match = APPENDIX_RE.match(line.text.strip())
+    if not match:
+        return None
+    appendix = match.group(1)
+    title = APPENDIX_STATUS_RE.sub("", match.group(2).strip()).strip()
+    next_idx = idx + 1
+    if not title:
+        while (
+            next_idx < len(lines)
+            and lines[next_idx].page == line.page
+            and APPENDIX_STATUS_RE.match(lines[next_idx].text.strip())
+        ):
+            next_idx += 1
+        parts: list[str] = []
+        while next_idx < len(lines) and lines[next_idx].page == line.page and len(parts) < 2:
+            candidate = lines[next_idx].text.strip()
+            if not candidate:
+                break
+            if APPENDIX_STATUS_RE.match(candidate):
+                next_idx += 1
+                continue
+            if lines[next_idx].size < 9.5:
+                break
+            if APPENDIX_CLAUSE_RE.match(candidate) or re.match(
+                r"^(?:Таблица|Рисунок)\b", candidate
+            ):
+                break
+            parts.append(candidate)
+            next_idx += 1
+        title = " ".join(parts).strip()
+    return appendix, title, next_idx
 
 
 def _extract_meta(path: Path, lines: list[Line]) -> DocMeta:
@@ -183,7 +254,13 @@ def parse_document(pdf_path: Path) -> ParsedDocument:
     lines = pages_to_lines(clean_pages(raw_pages))
     meta = _extract_meta(pdf_path, lines)
     tables: list[Table] = []
-    for block in extract_tables(pdf_path):
+    table_blocks = [
+        block for block in extract_tables(pdf_path) if _is_meaningful_table(block)
+    ]
+    table_boxes = [
+        (block.page, block.bbox) for block in table_blocks if block.bbox is not None
+    ]
+    for block in table_blocks:
         number, title, continuation = _table_caption(lines, block)
         tables.append(
             Table(
@@ -215,6 +292,7 @@ def parse_document(pdf_path: Path) -> ParsedDocument:
     appendix = ""
     started = False
     pending_number = ""
+    skip_until = -1
 
     def flush() -> None:
         nonlocal current
@@ -231,22 +309,19 @@ def parse_document(pdf_path: Path) -> ParsedDocument:
         current = None
 
     for idx, line in enumerate(lines):
+        if idx <= skip_until:
+            continue
         text = line.text.strip()
         if not text or _is_toc_line(text) or _is_header(text) or _is_page_number(text):
             continue
-        next_text = lines[idx + 1].text.strip() if idx + 1 < len(lines) else ""
+        if _inside_table(line, table_boxes) and APPENDIX_CLAUSE_RE.match(text):
+            continue
 
-        m_app = APPENDIX_RE.match(text)
-        if m_app and started and (
-            "справочное" in text.lower()
-            or "обязательное" in text.lower()
-            or "справочное" in next_text.lower()
-            or "обязательное" in next_text.lower()
-        ):
+        appendix_heading = _appendix_heading(lines, idx)
+        if appendix_heading and started:
+            appendix, section_title, next_idx = appendix_heading
             flush()
-            appendix = m_app.group(1)
             section = f"Приложение {appendix}"
-            section_title = m_app.group(2).strip()
             current = Clause(
                 number=section,
                 title=section_title,
@@ -256,10 +331,11 @@ def parse_document(pdf_path: Path) -> ParsedDocument:
                 section_title=section_title,
                 appendix=appendix,
             )
+            skip_until = next_idx - 1
             continue
 
         m_sec = SECTION_RE.match(text)
-        if m_sec:
+        if m_sec and line.size >= 11:
             flush()
             appendix = ""
             section = m_sec.group(1)
@@ -276,6 +352,21 @@ def parse_document(pdf_path: Path) -> ParsedDocument:
                     section_title=section_title,
                     appendix=appendix,
                 )
+            continue
+
+        m_acl = APPENDIX_CLAUSE_RE.match(text)
+        if m_acl and started:
+            flush()
+            pending_number = ""
+            current = Clause(
+                number=m_acl.group(1),
+                title=m_acl.group(2).strip()[:180],
+                text=m_acl.group(2).strip(),
+                page=line.page,
+                section=section,
+                section_title=section_title,
+                appendix=appendix,
+            )
             continue
 
         m_cl = CLAUSE_RE.match(text)

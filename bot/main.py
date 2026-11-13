@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import get_settings  # noqa: E402
 from app.guard.rate_limit import SlidingWindowLimiter  # noqa: E402
+from app.kb.formatting import format_outline
 from app.kb.kb import KnowledgeBase  # noqa: E402
 from app.rag.service import AskService  # noqa: E402
 from app.storage.s3 import S3Store  # noqa: E402
@@ -123,7 +124,7 @@ async def cmd_help(message: Message) -> None:
         "Команды: /gosts — список стандартов, /stats — статистика (админ).\n"
         "Аудит: /audit — ГОСТ-аудит версии (whitelist/админ), /audit_status — статус.\n"
         "База знаний: /kb <ГОСТ> — разделы, /term <термин> — определение, "
-        "/links <ГОСТ> — ссылки."
+        "/links <ГОСТ> — ссылки. «п.» — пункт стандарта."
     )
 
 
@@ -190,11 +191,8 @@ async def cmd_kb(message: Message) -> None:
     if not outline:
         await message.answer("Стандарт не найден. Посмотрите /gosts.")
         return
-    lines = [f"{outline['gost']}: разделы"]
-    for section in outline["sections"][:20]:
-        label = section["section"] or "—"
-        lines.append(f"• {label} {section['title'][:80]} — {len(section['clauses'])} п.")
-    for part in split_message("\n".join(lines)):
+    lines = format_outline(outline)
+    for part in split_message(lines):
         await message.answer(part)
 
 

@@ -308,10 +308,11 @@ class AskService:
             targets = [edge["target"] for edge in edges]
             text = f"{gosts[0]} упоминает внешние стандарты: " + "; ".join(targets)
             preferred = next(
-                (edge for edge in edges if str(edge.get("clause")) == "2"), edges[0]
+                (edge for edge in edges if str(edge.get("clause")) == "2"), None
             )
-            citation_clause = str(preferred.get("clause", "2"))
-            citation_page = int(preferred.get("page", 0) or 0)
+            if preferred:
+                citation_clause = str(preferred.get("clause", "2"))
+                citation_page = int(preferred.get("page", 0) or 0)
             answer.citations = []
         elif "ссыл" in query and "на какие" not in query and "ссылаются" in query:
             data = self.kb.neighbors(gosts[0])
