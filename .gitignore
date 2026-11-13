@@ -7,7 +7,9 @@ secrets/
 # --- data: source PDFs and generated corpus are not versioned ---
 data/source/
 data/corpus/
+data/corpus_v2/
 data/index/
+data/index_v2/
 data/tmp/
 *.pdf
 !data/prices/*

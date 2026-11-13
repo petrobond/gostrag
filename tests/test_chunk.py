@@ -23,6 +23,13 @@ def test_clean_cell_normalizes_identifier():
     assert _clean_cell("Acc-I -1 р е") == "Acc-I-1"
 
 
+def test_clean_cell_removes_watermark_letters():
+    assert _clean_cell("Р Neural machine translation") == "Neural machine translation"
+    assert _clean_cell("Т Е Transformer") == "Transformer"
+    assert _clean_cell("покГазателей") == "показателей"
+    assert _clean_cell("О К Функциональность оптимизации") == "Функциональность оптимизации"
+
+
 def test_build_chunks_adds_meta_and_table():
     doc = ParsedDocument(
         meta=DocMeta(

@@ -12,6 +12,7 @@ from app.rag.query_classifier import (
     classify_question,
     extract_appendix,
     extract_comparison_entities,
+    extract_table_ref,
     extract_term,
 )
 from app.retrieval.bm25 import BM25Index
@@ -38,6 +39,8 @@ class RetrievedChunk:
     doc_id: str
     clause_title: str = ""
     file: str = ""
+    table_number: str = ""
+    header: str = ""
 
 
 class Retriever:
@@ -64,9 +67,12 @@ class Retriever:
         gost_number: str | None = None,
     ) -> list[RetrievedChunk]:
         exact_gost, exact_clause = self._extract_reference(query, gost_number)
+        table_number = extract_table_ref(query)
         question_type = classify_question(query)
         exact: list[dict] = []
-        if exact_gost and exact_clause:
+        if table_number and exact_gost:
+            exact = self.chunks.table_chunks(exact_gost, table_number)
+        elif exact_gost and exact_clause:
             exact = self.chunks.find_fuzzy(exact_gost, exact_clause)
         elif question_type == "definition":
             exact = self.chunks.find_term(extract_term(query), exact_gost)
@@ -85,7 +91,9 @@ class Retriever:
         dense_hits = []
         try:
             vector = await self.embedder.aembed_query(query)
-            dense_hits = await self.qdrant.search(vector, limit=20, gost_number=exact_gost)
+            dense_hits = await self.qdrant.search(
+                vector, limit=20, gost_number=exact_gost, table_number=table_number
+            )
         except Exception as exc:  # noqa: BLE001 - degrade to BM25 when embedding/Qdrant fails
             log.warning("dense_search_unavailable", error=str(exc)[:200])
         bm25_query = query
@@ -149,7 +157,7 @@ class Retriever:
                     continue
                 result.insert(0, self._to_chunk(row, 1.0))
                 seen.add(row["chunk_id"])
-        if question_type == "table" and exact_gost:
+        if question_type == "table" and exact_gost and not (table_number and exact):
             added = 0
             for hit in self._bm25_in_doc(query, exact_gost, top_k=60):
                 payload = self.chunks.get(hit.chunk_id)
@@ -428,4 +436,6 @@ class Retriever:
             doc_id=payload["doc_id"],
             clause_title=payload.get("clause_title", ""),
             file=str(payload.get("provenance", {}).get("file", "")),
+            table_number=str(payload.get("table_number", "")),
+            header=str(payload.get("header", "")),
         )

@@ -26,7 +26,7 @@ class QdrantStore:
             collection_name=self.collection,
             vectors_config=qm.VectorParams(size=dim, distance=qm.Distance.COSINE),
         )
-        for field in ("doc_id", "gost_number", "section"):
+        for field in ("doc_id", "gost_number", "section", "table_number"):
             await self.client.create_payload_index(
                 collection_name=self.collection,
                 field_name=field,
@@ -46,12 +46,18 @@ class QdrantStore:
         vector: list[float],
         limit: int = 20,
         gost_number: str | None = None,
+        table_number: str | None = None,
     ) -> list[DenseHit]:
-        query_filter = None
+        conditions = []
         if gost_number:
-            query_filter = qm.Filter(
-                must=[qm.FieldCondition(key="gost_number", match=qm.MatchValue(value=gost_number))]
+            conditions.append(
+                qm.FieldCondition(key="gost_number", match=qm.MatchValue(value=gost_number))
             )
+        if table_number:
+            conditions.append(
+                qm.FieldCondition(key="table_number", match=qm.MatchValue(value=table_number))
+            )
+        query_filter = qm.Filter(must=conditions) if conditions else None
         response = await self.client.query_points(
             collection_name=self.collection,
             query=vector,

@@ -280,12 +280,27 @@ class ChunkStore:
                 result.setdefault(row.get("doc_type", ""), row)
         return list(result.values())
 
-    def table_chunks(self, gost_number: str) -> list[dict]:
-        return [
+    def table_chunks(self, gost_number: str, table_number: str | None = None) -> list[dict]:
+        rows = [
             row
             for row in self.by_gost.get(gost_number, [])
             if row.get("chunk_type") == "table"
         ]
+        if table_number is not None:
+            norm = _norm_table_number(table_number)
+            rows = [
+                row
+                for row in rows
+                if _norm_table_number(row.get("table_number", "")) == norm
+            ]
+        rows.sort(
+            key=lambda row: (
+                str(row.get("table_id", "")),
+                int(row.get("row_start", 0) or 0),
+                int(row.get("part", 1) or 1),
+            )
+        )
+        return rows
 
     def clause_siblings(self, doc_id: str, clause: str, limit: int = 12) -> list[dict]:
         """All chunks of the same top-level subsection: "4.2" -> 4., 4.1 ... 4.7."""
@@ -306,5 +321,9 @@ class ChunkStore:
 
 def _norm_gost(value: str) -> str:
     return re.sub(r"[\s—–-]+", "", value).lower()
+
+
+def _norm_table_number(value: str) -> str:
+    return re.sub(r"\s+", "", str(value or "")).lower()
 
 

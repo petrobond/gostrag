@@ -90,6 +90,7 @@ class TableBlock:
     page: int
     index: int
     rows: list[list[str]]
+    bbox: tuple[float, float, float, float] | None = None
 
 
 def extract_tables(pdf_path: Path, pages_hint: set[int] | None = None) -> list[TableBlock]:
@@ -101,15 +102,23 @@ def extract_tables(pdf_path: Path, pages_hint: set[int] | None = None) -> list[T
         for page_no, page in enumerate(pdf.pages, start=1):
             if pages_hint is not None and page_no not in pages_hint:
                 continue
-            for idx, table in enumerate(page.extract_tables() or [], start=1):
+            for idx, table in enumerate(page.find_tables() or [], start=1):
                 rows = [
                     [(cell or "").replace("\n", " ").strip() for cell in row]
-                    for row in table
+                    for row in table.extract()
                     if row and any((cell or "").strip() for cell in row)
                 ]
                 if len(rows) < 2:
                     continue
-                blocks.append(TableBlock(page=page_no, index=idx, rows=rows))
+                bbox = getattr(table, "bbox", None)
+                blocks.append(
+                    TableBlock(
+                        page=page_no,
+                        index=idx,
+                        rows=rows,
+                        bbox=tuple(bbox) if bbox else None,
+                    )
+                )
     covered = {block.page for block in blocks}
     missing = (pages_hint - covered) if pages_hint is not None else None
     if missing:
@@ -133,7 +142,15 @@ def _tables_fitz(pdf_path: Path, pages: set[int]) -> list[TableBlock]:
                 ]
                 if len(rows) < 2:
                     continue
-                blocks.append(TableBlock(page=page_no, index=idx, rows=rows))
+                bbox = getattr(table, "bbox", None)
+                blocks.append(
+                    TableBlock(
+                        page=page_no,
+                        index=idx,
+                        rows=rows,
+                        bbox=tuple(bbox) if bbox else None,
+                    )
+                )
     finally:
         doc.close()
     return blocks

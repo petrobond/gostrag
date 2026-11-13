@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.ingest.clean import Line, clean_pages, pages_to_lines
-from app.ingest.extract import extract_pdf, extract_tables
+from app.ingest.extract import TableBlock, extract_pdf, extract_tables
 
 CLAUSE_RE = re.compile(r"^(\d+(?:\.\d+){1,4})\s+(.+)$")
 SECTION_RE = re.compile(r"^(\d{1,2})\s+([А-ЯЁ][^.]{2,90})$")
@@ -18,6 +18,10 @@ GOST_NUMBER_RE = re.compile(r"(ГОСТ\s*Р|ПНСТ)\s*(\d+(?:\.\d+)?)[—–-
 ISO_RE = re.compile(r"\((ИСО/МЭК|ISO/IEC)\s*([^)]+)\)")
 VALID_FROM_RE = re.compile(r"Дата введения\s*[—–-]\s*(\d{4}[—–-]\d{2}[—–-]\d{2})")
 TABLE_CAPTION_RE = re.compile(r"^Таблица\s+([А-ЯA-Z]?\.?\s?\d+(?:\.\d+)?)\s*[—–-]?\s*(.*)$")
+TABLE_CONT_RE = re.compile(
+    r"^(?:Окончание|Продолжение)\s+таблицы\s+([А-ЯA-Z]?\.?\s?\d+(?:\.\d+)?)"
+    r"\s*[—–-]?\s*(.*)$"
+)
 TABLE_HINT_RE = re.compile(r"Таблица\s+[А-ЯA-Z]?\.?\s?\d", re.IGNORECASE)
 
 
@@ -51,6 +55,7 @@ class Table:
     rows: list[list[str]]
     number: str = ""
     title: str = ""
+    continuation: bool = False
 
 
 @dataclass(slots=True)
@@ -117,34 +122,91 @@ def _extract_meta(path: Path, lines: list[Line]) -> DocMeta:
     return meta
 
 
-def _table_caption(lines: list[Line], page: int) -> tuple[str, str]:
-    """Find "Таблица N — title": the last caption on or up to 3 pages before the table."""
-    caption = ("", "")
-    for line in lines:
-        if line.page > page:
-            break
-        if line.page < page - 3:
-            continue
-        match = TABLE_CAPTION_RE.match(line.text.strip())
-        if match:
-            caption = (match.group(1).replace(" ", ""), match.group(2).strip())
-    return caption
+def _parse_caption_text(text: str) -> tuple[str, str, bool] | None:
+    continuation = TABLE_CONT_RE.match(text)
+    if continuation:
+        return (
+            continuation.group(1).replace(" ", ""),
+            continuation.group(2).strip(),
+            True,
+        )
+    caption = TABLE_CAPTION_RE.match(text)
+    if caption:
+        return (caption.group(1).replace(" ", ""), caption.group(2).strip(), False)
+    return None
+
+
+def _table_caption(lines: list[Line], block: TableBlock) -> tuple[str, str, bool]:
+    """Bind a caption to the table by bbox, not by page distance.
+
+    pdfplumber gives table bboxes in PDF points.  The caption is the nearest
+    caption line above the table (same page) or at the bottom of the previous
+    page.  Lines above the caption are never included, so a paragraph before
+    the table cannot become part of its title.
+    """
+    if block.bbox is None:
+        return ("", "", False)
+
+    top = block.bbox[1]
+    above = [
+        line
+        for line in lines
+        if line.page == block.page
+        and line.bbox[3] <= top - 1
+        and top - line.bbox[3] <= 60
+    ]
+    above.sort(key=lambda line: (line.bbox[1], line.bbox[0]))
+    for idx in range(len(above) - 1, -1, -1):
+        if _parse_caption_text(above[idx].text.strip()):
+            text = " ".join(line.text.strip() for line in above[idx:])
+            parsed = _parse_caption_text(text)
+            if parsed:
+                return parsed
+
+    previous = [
+        line
+        for line in lines
+        if line.page == block.page - 1 and line.bbox[1] > 700
+    ]
+    previous.sort(key=lambda line: (line.bbox[1], line.bbox[0]))
+    for idx in range(len(previous) - 1, -1, -1):
+        if _parse_caption_text(previous[idx].text.strip()):
+            text = " ".join(line.text.strip() for line in previous[idx:])
+            parsed = _parse_caption_text(text)
+            if parsed:
+                return parsed
+    return ("", "", False)
 
 
 def parse_document(pdf_path: Path) -> ParsedDocument:
     raw_pages = extract_pdf(pdf_path)
     lines = pages_to_lines(clean_pages(raw_pages))
     meta = _extract_meta(pdf_path, lines)
-    tables = [
-        Table(
-            page=block.page,
-            index=block.index,
-            rows=block.rows,
-            number=(caption := _table_caption(lines, block.page))[0],
-            title=caption[1],
+    tables: list[Table] = []
+    for block in extract_tables(pdf_path):
+        number, title, continuation = _table_caption(lines, block)
+        tables.append(
+            Table(
+                page=block.page,
+                index=block.index,
+                rows=block.rows,
+                number=number,
+                title=title,
+                continuation=continuation,
+            )
         )
-        for block in extract_tables(pdf_path)
-    ]
+    for table in tables:
+        if table.continuation and not table.title:
+            previous = next(
+                (
+                    item
+                    for item in tables
+                    if item.number == table.number and item.title and item is not table
+                ),
+                None,
+            )
+            if previous:
+                table.title = previous.title
 
     clauses: list[Clause] = []
     current: Clause | None = None

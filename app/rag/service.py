@@ -11,7 +11,12 @@ from app.kb.kb import KnowledgeBase
 from app.llm.chain import LLMChain
 from app.rag.chunk_store import ChunkStore
 from app.rag.generator import Answer, Citation, Generator
-from app.rag.query_classifier import classify_question, extract_clause, extract_gosts
+from app.rag.query_classifier import (
+    classify_question,
+    extract_clause,
+    extract_gosts,
+    extract_table_ref,
+)
 from app.rag.retriever import RetrievedChunk, Retriever
 from app.retrieval.bm25 import BM25Index
 from app.storage.qdrant import QdrantStore
@@ -85,6 +90,11 @@ class AskService:
             chunks = await self.retriever.retrieve_comparison(question, gosts, top_k=4)
         else:
             chunks = await self.retriever.retrieve(question, top_k=top_k or self.settings.max_top_k)
+        if question_type == "table" and self._is_table_list_question(question):
+            table_answer = self._table_answer(question, chunks)
+            if table_answer is not None:
+                latency_ms = int((time.perf_counter() - started) * 1000)
+                return AskResult(answer=table_answer, chunks=chunks, latency_ms=latency_ms)
         answer = await self.generator.generate(question, [asdict(chunk) for chunk in chunks])
         if question_type == "comparison" and len(gosts) >= 2:
             self._append_comparison_facts(answer, chunks, gosts)
@@ -94,6 +104,7 @@ class AskService:
             "ссыл" in question.lower()
             or "связаны" in question.lower()
             or "внешн" in question.lower()
+            or self._is_external_links_question(question.lower())
         ):
             self._append_kb_links(answer, question, gosts)
         if (
@@ -196,6 +207,65 @@ class AskService:
         return f"{answer.rstrip()}\n\nПолный перечень показателей: {'; '.join(additions)}."
 
     @staticmethod
+    def _is_table_list_question(question: str) -> bool:
+        query = question.lower()
+        return any(
+            marker in query
+            for marker in (
+                "что приведено",
+                "что содержит",
+                "перечисли",
+                "какие строки",
+                "какие сценарии",
+                "какие данные",
+                "содержимое",
+                "список",
+            )
+        )
+
+    @staticmethod
+    def _table_answer(question: str, chunks: list[RetrievedChunk]) -> Answer | None:
+        """Return the full table for "что приведено в таблице N" questions."""
+        table_number = extract_table_ref(question)
+        if not table_number:
+            return None
+        table_chunks = [chunk for chunk in chunks if chunk.table_number == table_number]
+        if not table_chunks:
+            return None
+        rows: list[str] = []
+        for chunk in table_chunks:
+            lines = [line for line in chunk.text.splitlines() if line.strip()]
+            if lines and lines[0].lower().startswith("таблица"):
+                lines = lines[1:]
+            rows.extend(lines)
+        if not rows:
+            return None
+        first = table_chunks[0]
+        title = f"Таблица {table_number}"
+        if first.clause_title:
+            title += f" — {first.clause_title}"
+        if first.header:
+            title += f". {first.header}"
+        answer_text = title + "\n" + "\n".join(rows)
+        citation = Citation(
+            gost=first.gost_number,
+            clause=first.clause,
+            page=first.page,
+            quote=first.text.split("\n", 1)[0][:300],
+            file=first.file,
+            valid=True,
+            page_valid=True,
+            quote_valid=True,
+        )
+        return Answer(
+            answer=answer_text,
+            citations=[citation],
+            confidence=1.0,
+            model="deterministic:table",
+            provider="rules",
+        )
+
+    @staticmethod
     def _attach_fallback_citation(answer: Answer, chunks: list[RetrievedChunk]) -> None:
         """Attach one grounded citation when the model omitted it."""
         if answer.refused or answer.citations:
@@ -224,41 +294,51 @@ class AskService:
             return
         query = question.lower()
         citation_gost = gosts[0]
+        citation_clause = "2"
+        citation_page = 0
         if "связаны" in query and len(gosts) >= 2:
             path = self.kb.path(gosts[0], gosts[1])
             if not path:
                 return
             text = "Цепочка связей: " + " → ".join(path)
+        elif self._is_external_links_question(query):
+            edges = self.kb.external_neighbors(gosts[0])
+            if not edges:
+                return
+            targets = [edge["target"] for edge in edges]
+            text = f"{gosts[0]} упоминает внешние стандарты: " + "; ".join(targets)
+            preferred = next(
+                (edge for edge in edges if str(edge.get("clause")) == "2"), edges[0]
+            )
+            citation_clause = str(preferred.get("clause", "2"))
+            citation_page = int(preferred.get("page", 0) or 0)
+        elif "ссыл" in query and "на какие" not in query and "ссылаются" in query:
+            data = self.kb.neighbors(gosts[0])
+            sources = [edge["source"] for edge in data["incoming"]]
+            text = f"На {gosts[0]} ссылаются: " + "; ".join(sources[:8])
+            if sources:
+                citation_gost = sources[0]
         elif "ссыл" in query:
             data = self.kb.neighbors(gosts[0])
-            if "внешн" in query:
-                targets = [edge["target"] for edge in data["outgoing"] if not edge["internal"]]
-                text = f"{gosts[0]} упоминает внешние стандарты: " + "; ".join(targets[:8])
-            elif "ссылаются" in query and "на какие" not in query:
-                sources = [edge["source"] for edge in data["incoming"]]
-                text = f"На {gosts[0]} ссылаются: " + "; ".join(sources[:8])
-                if sources:
-                    citation_gost = sources[0]
-            else:
-                targets = [edge["target"] for edge in data["outgoing"] if edge["internal"]]
-                text = f"{gosts[0]} ссылается на: " + "; ".join(targets[:20])
+            targets = [edge["target"] for edge in data["outgoing"] if edge["internal"]]
+            text = f"{gosts[0]} ссылается на: " + "; ".join(targets[:20])
         else:
             return
         if text in answer.answer:
             return
         answer.answer = text
         answer.refused = False
-        rows = self.chunks.find(citation_gost, "2")
+        rows = self.chunks.find(citation_gost, citation_clause)
         if rows and not any(
-            citation.gost == citation_gost and citation.clause == "2"
+            citation.gost == citation_gost and citation.clause == citation_clause
             for citation in answer.citations
         ):
             row = rows[0]
             answer.citations.append(
                 Citation(
                     gost=citation_gost,
-                    clause="2",
-                    page=int(row.get("page", 0) or 0),
+                    clause=citation_clause,
+                    page=int(row.get("page", 0) or citation_page),
                     quote=row["text"][:200],
                     file=str(row.get("provenance", {}).get("file", "")),
                     valid=True,
@@ -266,6 +346,30 @@ class AskService:
                     quote_valid=True,
                 )
             )
+        elif citation_page and not any(
+            citation.gost == citation_gost and citation.page == citation_page
+            for citation in answer.citations
+        ):
+            answer.citations.append(
+                Citation(
+                    gost=citation_gost,
+                    clause=citation_clause,
+                    page=citation_page,
+                    quote="",
+                    valid=True,
+                    page_valid=True,
+                    quote_valid=False,
+                )
+            )
+
+    @staticmethod
+    def _is_external_links_question(query: str) -> bool:
+        return (
+            "внешн" in query
+            or "нормативн" in query
+            or ("упомина" in query and "стандарт" in query)
+            or ("на какие" in query and "стандарт" in query and "ссыла" in query)
+        )
 
     def _append_outline_facts(
         self, answer: Answer, question: str, gosts: list[str]

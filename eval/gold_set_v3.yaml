@@ -403,11 +403,17 @@ questions:
 - id: TB01
   category: table
   question: Что приведено в таблице 6.3 ПНСТ 844—2023?
-  expected_answer: Таблица 6.3 — Различные сценарии тестирования и классические модели
-    с соответствующими наборами. Сценарий тестирования | Набор данных | Цель в области
-    качества | Эталонная модель Классификация изображений | ImageNet | 74,90 % classification
-    | ResNet-50 v1.5 Обнаружение (облегченных) объектов | COCO 2017 | 21,2 % mAP |
-    SSD (ResNet-34 backbone)
+  expected_answer: 'Таблица 6.3 — Различные сценарии тестирования и классические модели
+    с соответствующими наборами данных и целями в области качества. Сценарий тестирования
+    | Набор данных | Цель в области качества | Эталонная модель Классификация изображений
+    | ImageNet | 74,90 % classification | ResNet-50 v1.5 Обнаружение (облегченных)
+    объектов | COCO 2017 | 21,2 % mAP | SSD (ResNet-34 backbone) Обнаружение
+    (тяжеловесных) объектов | COCO 2017 | 0.377 Box min AP, 0.339 Mask min AP | Mask
+    R-CNN Предварительно обученная модель | Wikipedia | Related to specific tasks | BERT
+    Перевод (повторяющийся) | WMT English-German | 21.8 BLEU | Neural machine translation
+    Перевод (разовый) | WMT English-German | 25.0 BLEU | Transformer Рекомендация |
+    MovieLens-20M | 0.635 HR@10 | Neural collaborative filtering Обучение с подкреплением
+    | Pro games | 40.00 % move prediction | Mini Go'
   expected_sources:
   - ПНСТ 844—2023, таблица 6.3
   expected_page: 8

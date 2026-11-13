@@ -4,7 +4,7 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass
 
-from app.ingest.parse import ParsedDocument
+from app.ingest.parse import ParsedDocument, Table
 
 MAX_CHARS = 1800
 MIN_CHARS = 40
@@ -30,6 +30,15 @@ class Chunk:
     corpus_version: str
     provenance: dict
     chunk_type: str = "clause"
+    table_number: str = ""
+    table_id: str = ""
+    table_caption: str = ""
+    row_start: int = 0
+    row_end: int = 0
+    row_count: int = 0
+    header: str = ""
+    part: int = 0
+    parts_total: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -131,57 +140,126 @@ def _clean_cell(value: str) -> str:
     text = value.replace("\xad", "").replace("\u00ad", "")
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"(?<=[A-Za-zА-Яа-я])\s*-\s*(?=\d)", "-", text)
+    # Watermark letters: "Р Neural ...", "Т Е Transformer", "ХСкорость".
+    text = re.sub(r"^(?:[А-ЯЁA-Z]\s+)+(?=[А-ЯЁA-Z])", "", text)
+    text = re.sub(r"^[А-ЯЁA-Z](?=[А-ЯЁA-Z][а-яё])", "", text)
+    text = re.sub(r"(?<=[а-яё])[А-ЯЁ](?=[а-яё])", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
     if IDENT_RE.match(text):
         text = NOISE_LETTER_RE.sub(" ", text)
         text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
+def _table_rows(table: Table) -> list[list[str]]:
+    return [
+        [_clean_cell(cell) for cell in row]
+        for row in table.rows
+        if row and any((cell or "").strip() for cell in row)
+    ]
+
+
+def _same_header(row: list[str], header: list[str]) -> bool:
+    return [cell.strip().lower() for cell in row] == [
+        cell.strip().lower() for cell in header
+    ]
+
+
 def _table_chunks(doc: ParsedDocument, corpus_version: str, filename: str) -> list[Chunk]:
-    """One chunk per table part: caption plus pipe-separated rows."""
+    """Group table parts by table number and keep rows/headers consistent.
+
+    Continuation tables ("Окончание таблицы N") are merged with their first
+    part.  Different tables are never mixed, even if they share a page.
+    """
     chunks: list[Chunk] = []
+    groups: dict[str, list[tuple[Table, list[list[str]]]]] = {}
+    order: list[str] = []
     for table in doc.tables:
-        rows = [
-            [_clean_cell(cell) for cell in row]
-            for row in table.rows
-            if row and any((cell or "").strip() for cell in row)
-        ]
+        rows = _table_rows(table)
         if len(rows) < 2:
             continue
-        clause = f"Таблица {table.number}" if table.number else f"Таблица (с. {table.page})"
-        header = " | ".join(rows[0])
-        prefix = f"{clause} — {table.title}. " if table.title else f"{clause}. "
-        parts: list[str] = []
+        key = f"num:{table.number}" if table.number else f"single:{table.page}:{table.index}"
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append((table, rows))
+
+    for key in order:
+        items = sorted(groups[key], key=lambda item: (item[0].page, item[0].index))
+        first_table = items[0][0]
+        header_cells = items[0][1][0]
+        header = " | ".join(header_cells)
+        data_rows: list[tuple[list[str], int]] = []
+        for table, rows in items:
+            for row in rows:
+                if _same_header(row, header_cells):
+                    continue
+                data_rows.append((row, table.page))
+        if not data_rows:
+            continue
+
+        table_number = first_table.number
+        title = next((table.title for table, _ in items if table.title), "")
+        clause = (
+            f"Таблица {table_number}"
+            if table_number
+            else f"Таблица (с. {first_table.page})"
+        )
+        prefix = f"{clause} — {title}. " if title else f"{clause}. "
+        table_id = f"{doc.meta.doc_id}#t{first_table.page}-{first_table.index}"
+        row_count = len(data_rows)
+        part_texts: list[tuple[str, int, int, int]] = []
         current = prefix + header
-        for row in rows[1:]:
+        current_start = 1
+        current_end = 0
+        current_page = first_table.page
+        for idx, (row, page) in enumerate(data_rows, start=1):
             line = " | ".join(row)
-            if len(current) + 1 + len(line) > MAX_CHARS:
-                parts.append(current)
+            if current_end and len(current) + 1 + len(line) > MAX_CHARS:
+                part_texts.append((current, current_start, current_end, current_page))
                 current = f"{clause}. {header}\n{line}"
+                current_start = idx
+                current_page = page
+                current_end = idx
             else:
                 current = f"{current}\n{line}"
-        parts.append(current)
-        for idx, part in enumerate(parts, start=1):
+                if current_end == 0:
+                    current_start = idx
+                    current_page = page
+                current_end = idx
+        part_texts.append((current, current_start, current_end, current_page))
+        parts_total = len(part_texts)
+
+        for part_no, (part, row_start, row_end, page) in enumerate(part_texts, start=1):
             if len(part) < MIN_CHARS:
                 continue
-            suffix = f"#p{idx}" if idx > 1 else ""
+            suffix = f"#p{part_no}" if part_no > 1 else ""
             chunks.append(
                 Chunk(
-                    chunk_id=f"{doc.meta.doc_id}#t{table.page}-{table.index}{suffix}",
+                    chunk_id=f"{table_id}{suffix}",
                     doc_id=doc.meta.doc_id,
                     gost_number=doc.meta.gost_number,
                     doc_type=doc.meta.doc_type,
                     iso_analog=doc.meta.iso_analog,
                     section="",
-                    section_title=table.title or f"Таблица (с. {table.page})",
+                    section_title=title or f"Таблица (с. {first_table.page})",
                     clause=clause,
-                    clause_title=table.title[:180],
-                    page=table.page,
+                    clause_title=title[:180],
+                    page=page,
                     text=part,
                     text_hash=_hash(part),
                     corpus_version=corpus_version,
-                    provenance=_provenance(filename, f"{doc.meta.doc_id}#t{table.page}-{table.index}"),
+                    provenance=_provenance(filename, table_id),
                     chunk_type="table",
+                    table_number=table_number,
+                    table_id=table_id,
+                    table_caption=title,
+                    row_start=row_start,
+                    row_end=row_end,
+                    row_count=row_count,
+                    header=header,
+                    part=part_no,
+                    parts_total=parts_total,
                 )
             )
     return chunks

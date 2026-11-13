@@ -106,6 +106,28 @@ class KnowledgeBase:
         ][:limit]
         return {"gost": found, "outgoing": outgoing, "incoming": incoming}
 
+    def external_neighbors(self, gost: str, limit: int = 50) -> list[dict]:
+        """Outgoing references to standards outside the corpus, deduped and ordered."""
+        found = self.find_gost(gost) or gost
+        edges = [
+            edge for edge in self.out_edges.get(found, []) if not edge.get("internal", False)
+        ]
+        seen: set[str] = set()
+        result: list[dict] = []
+        for edge in sorted(
+            edges,
+            key=lambda item: (
+                int(item.get("page", 0) or 0),
+                str(item.get("clause", "")),
+            ),
+        ):
+            target = str(edge.get("target", ""))
+            if not target or target in seen:
+                continue
+            seen.add(target)
+            result.append(edge)
+        return result[:limit]
+
     def path(self, source: str, target: str) -> list[str]:
         start = self.find_gost(source) or source
         goal = self.find_gost(target) or target

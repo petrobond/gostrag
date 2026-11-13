@@ -4,6 +4,9 @@ import re
 
 GOST_RE = re.compile(r"(ГОСТ\s*Р|ПНСТ)\s*(\d+(?:\.\d+)?)\s*[—–-]\s*(\d{4})", re.IGNORECASE)
 CLAUSE_RE = re.compile(r"(?:п\.?|пункт)\s*(\d+(?:\.\d+)+)", re.IGNORECASE)
+TABLE_REF_RE = re.compile(
+    r"таблиц[аыуе]\s+([А-ЯA-Z]?\.?\s?\d+(?:\.\d+)?)", re.IGNORECASE
+)
 
 INJECTION_MARKERS = (
     "игнорируй",
@@ -57,6 +60,11 @@ def extract_gosts(question: str) -> list[str]:
 def extract_clause(question: str) -> str | None:
     match = CLAUSE_RE.search(question)
     return match.group(1) if match else None
+
+
+def extract_table_ref(question: str) -> str | None:
+    match = TABLE_REF_RE.search(question)
+    return match.group(1).replace(" ", "") if match else None
 
 
 def is_injection(question: str) -> bool:

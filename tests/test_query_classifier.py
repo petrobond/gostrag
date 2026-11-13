@@ -3,6 +3,7 @@ from app.rag.query_classifier import (
     extract_clause,
     extract_comparison_entities,
     extract_gosts,
+    extract_table_ref,
     is_injection,
 )
 
@@ -46,3 +47,9 @@ def test_extract_comparison_entities():
         "Чем отличаются веб-поиск и поиск по семантическому графу в ГОСТ Р 59926—2021?"
     )
     assert entities == ["веб-поиск", "поиск по семантическому графу"]
+
+
+def test_extract_table_ref():
+    assert extract_table_ref("Что приведено в таблице 6.3 ПНСТ 844—2023?") == "6.3"
+    assert extract_table_ref("таблицы 6.1") == "6.1"
+    assert extract_table_ref("Что такое искусственный интеллект?") is None
