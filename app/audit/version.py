@@ -26,8 +26,10 @@ def _git(args: list[str], root: Path) -> str:
 
 
 def get_git_commit(root: Path | None = None) -> str:
-    return _git(["rev-parse", "HEAD"], root or Path.cwd())
+    return os.getenv("GIT_COMMIT", "") or _git(["rev-parse", "HEAD"], root or Path.cwd())
 
 
 def get_git_tag(root: Path | None = None) -> str:
-    return _git(["describe", "--tags", "--always"], root or Path.cwd())
+    return os.getenv("GIT_TAG", "") or _git(
+        ["describe", "--tags", "--always"], root or Path.cwd()
+    )

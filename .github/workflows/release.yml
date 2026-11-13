@@ -41,6 +41,7 @@ jobs:
           build-args: |
             APP_VERSION=${{ steps.version.outputs.value }}
             GIT_COMMIT=${{ github.sha }}
+            GIT_TAG=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

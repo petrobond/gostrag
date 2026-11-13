@@ -31,8 +31,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 ARG APP_VERSION=3.2.0
 ARG GIT_COMMIT=""
+ARG GIT_TAG=""
 ENV APP_VERSION=${APP_VERSION} \
-    GIT_COMMIT=${GIT_COMMIT}
+    GIT_COMMIT=${GIT_COMMIT} \
+    GIT_TAG=${GIT_TAG}
 
 WORKDIR /app
 COPY deploy/certs/*.crt /usr/local/share/ca-certificates/
