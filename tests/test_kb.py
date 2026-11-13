@@ -16,6 +16,14 @@ class FakeChunks:
                     "provenance": {"file": "gost-r-71562-2024.pdf"},
                 }
             ]
+        if gost == "ГОСТ Р 71540—2024" and clause == "2":
+            return [
+                {
+                    "text": "2 Нормативные ссылки. В настоящем стандарте использованы ссылки.",
+                    "page": 5,
+                    "provenance": {"file": "gost-r-71540-2024.pdf"},
+                }
+            ]
         return []
 
 
@@ -71,6 +79,29 @@ def test_external_neighbors_only_external():
         "ГОСТ Р 57700.37—2021",
     ]
     assert all(not edge["internal"] for edge in edges)
+
+
+def test_corpus_links_are_internal_not_external():
+    question = "На какие стандарты корпуса ссылается ГОСТ Р 71540—2024?"
+    assert not AskService._is_external_links_question(question.lower())
+
+    service = SimpleNamespace(
+        kb=kb(),
+        chunks=FakeChunks(),
+        _is_external_links_question=AskService._is_external_links_question,
+    )
+    answer = Answer(
+        answer="Ответ LLM",
+        citations=[Citation(gost="ГОСТ Р 71540—2024", clause="3.10", page=6, valid=True)],
+    )
+    AskService._append_kb_links(service, answer, question, ["ГОСТ Р 71540—2024"])
+
+    assert "ГОСТ Р 71476—2024" in answer.answer
+    assert "27000" not in answer.answer
+    assert "57149" not in answer.answer
+    assert len(answer.citations) == 1
+    assert answer.citations[0].gost == "ГОСТ Р 71540—2024"
+    assert answer.citations[0].clause == "2"
 
 
 def test_external_links_intent_and_deterministic_answer():

@@ -323,6 +323,7 @@ class AskService:
             data = self.kb.neighbors(gosts[0])
             targets = [edge["target"] for edge in data["outgoing"] if edge["internal"]]
             text = f"{gosts[0]} ссылается на: " + "; ".join(targets[:20])
+            answer.citations = []
         else:
             return
         if text in answer.answer:
@@ -365,6 +366,8 @@ class AskService:
 
     @staticmethod
     def _is_external_links_question(query: str) -> bool:
+        if "корпус" in query:
+            return False
         if "внешн" in query:
             return True
         if "раздел" in query:
