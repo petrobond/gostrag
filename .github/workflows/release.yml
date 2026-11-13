@@ -66,6 +66,11 @@ jobs:
           printf '%s' "$GH_TOKEN" | ssh -i ~/.ssh/id_ed25519 \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             "sudo -n docker login ghcr.io -u '${{ github.actor }}' --password-stdin"
+      - name: Upload deploy script
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            'cat > /tmp/gostrag_deploy.sh' < scripts/remote_deploy.sh
       - name: Deploy
         env:
           TAG: ${{ github.ref_name }}
@@ -75,9 +80,11 @@ jobs:
           QDRANT_COLLECTION: ${{ vars.QDRANT_COLLECTION }}
           CORPUS_VERSION: ${{ vars.CORPUS_VERSION }}
         run: |
+          set -o pipefail
           ssh -i ~/.ssh/id_ed25519 \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             "TAG='$TAG' APP_IMAGE='$APP_IMAGE' APP_VERSION='$APP_VERSION' \
             DATA_VERSION='$DATA_VERSION' QDRANT_COLLECTION='$QDRANT_COLLECTION' \
-            CORPUS_VERSION='$CORPUS_VERSION' bash -s" \
-            < scripts/remote_deploy.sh
+            CORPUS_VERSION='$CORPUS_VERSION' bash /tmp/gostrag_deploy.sh" \
+            | tee /tmp/deploy.out
+          grep -q 'deploy ok:' /tmp/deploy.out

@@ -12,8 +12,9 @@ QDRANT_COLLECTION="${QDRANT_COLLECTION:-}"
 CORPUS_VERSION="${CORPUS_VERSION:-}"
 
 ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o ConnectTimeout=10 \
+  "$SSH_USER@$SSH_HOST" 'cat > /tmp/gostrag_deploy.sh' < scripts/remote_deploy.sh
+ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o ConnectTimeout=10 \
   "$SSH_USER@$SSH_HOST" \
   "TAG='$TAG' APP_IMAGE='$APP_IMAGE' APP_VERSION='$APP_VERSION' \
   DATA_VERSION='$DATA_VERSION' QDRANT_COLLECTION='$QDRANT_COLLECTION' \
-  CORPUS_VERSION='$CORPUS_VERSION' bash -s" \
-  < scripts/remote_deploy.sh
+  CORPUS_VERSION='$CORPUS_VERSION' bash /tmp/gostrag_deploy.sh"

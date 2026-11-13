@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+exec </dev/null
 
 : "${TAG:?TAG is required}"
 : "${APP_IMAGE:?APP_IMAGE is required}"
@@ -20,7 +21,7 @@ sudo -n cp -p deploy/.env "backups/deploy.env.$STAMP"
 sudo -n chmod 600 "backups/deploy.env.$STAMP"
 
 "${COMPOSE[@]}" exec -T postgres \
-  pg_dump -U gostrag gostrag | gzip > "backups/postgres-$STAMP.sql.gz"
+  pg_dump -U gostrag gostrag </dev/null | gzip > "backups/postgres-$STAMP.sql.gz"
 curl -fsS -X POST "http://localhost:6333/collections/$PREV_COLLECTION/snapshots" >/dev/null || true
 
 git fetch --tags origin
@@ -43,9 +44,9 @@ fi
 
 "${COMPOSE[@]}" pull app bot data
 if [ -n "${DATA_VERSION:-}" ]; then
-  "${COMPOSE[@]}" --profile data run --rm data \
+  "${COMPOSE[@]}" --profile data run --rm -T data \
     python -m app.cli data-fetch --version "$DATA_VERSION" --dest /data
-  "${COMPOSE[@]}" --profile data run --rm data
+  "${COMPOSE[@]}" --profile data run --rm -T data
 fi
 "${COMPOSE[@]}" up -d --remove-orphans
 
