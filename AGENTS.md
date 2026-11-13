@@ -29,7 +29,7 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
 
 - `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст
 - `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready)
-- версия продукта: **3.1.0** (pyproject = APP_VERSION = `/health`)
+- версия продукта: **3.2.0** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
 - Qdrant — коллекция `gost_chunks_bge_m3` (прод, 4452 точки), `gost_chunks` — старая коллекция e5 (rollback), v1.12.4
