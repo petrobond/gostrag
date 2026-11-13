@@ -93,6 +93,7 @@ VPS (ultraVDS):
 ```bash
 .venv/bin/python -m pytest -q tests          # 65 тестов
 .venv/bin/python -m ruff check app bot eval tests
+.venv/bin/python scripts/net_matrix.py        # сеть: Telegram, VPS, Cloud.ru, GigaChat
 .venv/bin/python scripts/ask.py "вопрос"
 .venv/bin/python scripts/eval_retrieval.py --gold eval/gold_set_v2.yaml --top-k 8
 .venv/bin/python eval/judge.py --gold eval/gold_set_v2.yaml --out eval/report_v2.json
