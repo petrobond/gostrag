@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from app.api.ask import router as ask_router
+from app.audit.version import get_git_commit
 from app.config import get_settings
 from app.rag.service import AskService
 
@@ -33,10 +34,13 @@ app.include_router(ask_router, prefix="/api")
 
 @app.get("/health")
 async def health() -> dict[str, str | bool]:
-    ready = getattr(app.state, "service", None) is not None
+    service = getattr(app.state, "service", None)
     return {
         "status": "ok",
         "version": settings.app_version,
+        "commit": os.getenv("GIT_COMMIT", "") or get_git_commit(),
         "corpus_version": settings.corpus_version,
-        "index_ready": ready,
+        "collection": settings.qdrant_collection,
+        "index_ready": service is not None,
+        "kb_ready": bool(service is not None and getattr(service, "kb", None) is not None),
     }

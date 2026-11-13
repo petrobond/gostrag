@@ -15,17 +15,22 @@ RAG-система по российским стандартам ИИ (39 PDF: 
 
 ## 3. Правило изменений (обязательно)
 
-Любое отклонение от `plans/06-plan-v3.md` (архитектура, модели, маршрутизация VPN,
-объём работ, порядок этапов, хранение данных) согласуется с владельцем — Петром
-Бондаревым (petrobond). Без письменного согласования изменения не вносятся.
-Согласованное изменение оформляется новой ревизией плана и записью в «Журнал
-изменений плана». Не принимать самостоятельных решений о разделении сервисов
-(например, «бот локально, ядро на VPS»).
+Любое отклонение от `plans/08-plan-v3.2-local-first.md` (архитектура, модели,
+маршрутизация VPN, объём работ, порядок этапов, хранение данных) согласуется
+с владельцем — Петром Бондаревым (petrobond). Без письменного согласования
+изменения не вносятся. Согласованное изменение оформляется новой ревизией плана
+и записью в «Журнал изменений плана».
+
+Режим работы с 2026-11-13 — **local-first**: разработка, тесты, ingest, embed,
+eval, judge и audit выполняются локально; VPS `ultra` — только runtime
+(без VS Code Server, сборок, ingest и правок кода). Деплой — по тегу через CI/CD.
 
 ## 4. Архитектура
 
 - `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст
-- `app/` — FastAPI: `POST /api/ask`, `GET /health`
+- `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready)
+- версия продукта: **3.1.0** (pyproject = APP_VERSION = `/health`)
+- CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - Qdrant — коллекция `gost_chunks_bge_m3` (прод, 4452 точки), `gost_chunks` — старая коллекция e5 (rollback), v1.12.4
 - KB/граф — `app/kb`, `data/kb`: 400 терминов, 97 узлов (37 корпусных + 60 внешних),
   116 рёбер (24 внутренних); команды `/kb`, `/term`, `/links`; 1-hop для cross_reference
@@ -38,23 +43,32 @@ RAG-система по российским стандартам ИИ (39 PDF: 
   - локальная `intfloat/multilingual-e5-large` (ONNX, volume `gostrag_fastembed_cache`)
     — fallback: `EMBEDDING_PROVIDER=local`; модель в образе не нужна
   - резерв API: `Qwen/Qwen3-Embedding-0.6B` (1024d, recall@8 1.000, pass 0.946)
-  - таблица/чанкинг: T01 (полный список `Acc-I-*`) — известный дефект, этап 2
+  - таблицы: T01 закрыт слиянием дублей `chunk_id`; TB01 (таблица 6.3) — дефект
+    gold подтверждён по PDF: 8 строк, а не 2; исправление — этап 7 плана 08
 
 ## 5. Где что запущено
 
 VPS (ultraVDS):
 
-- 45.15.252.185, Ubuntu 26.04, 2 vCPU, 3.3 ГБ RAM + swap 2 ГБ
-- пользователь `gostrag` (NOPASSWD sudo), ключ `~/.ssh/petrobond`, алиас `ultra`
+- 45.15.252.185, Ubuntu 26.04, 2 vCPU, 3.3 ГБ RAM + swap 5.7 ГБ, диск 49 ГБ
+- пользователь `gostrag` (NOPASSWD sudo), ключ `~/.ssh/petrobond`, алиас `ultra`;
+  deploy-ключ `~/.ssh/vps_deploy_key` (ed25519) — для CI/CD
 - репозиторий `/opt/gostrag`, ветка `release/v3.0.0`
 - запуск: `cd /opt/gostrag && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`
 - сервисы: `app`, `bot`, `qdrant`, `postgres`, `redis`
+- **только runtime**: без VS Code Server, сборок, ingest и правок кода
 - секреты: `/opt/gostrag/secrets` (600), `deploy/.env` (600)
 - данные: `/opt/gostrag/data/{corpus,index,source}`
+- `ProBack_SA` (`proback-rag-bot.service`) — отдельный проект, не трогать
 
 Локально:
 
-- `/Users/Lenovo/Projects/RAG_Timur`, venv `.venv`
+- `/Users/Lenovo/Projects/RAG_Timur`, venv `.venv`, Docker Desktop (8.3 ГБ)
+- локальный контур: `deploy/docker-compose.local.yml` (qdrant/postgres/redis),
+  Qdrant на `127.0.0.1:6335` (6333 занят старым `gostrag-qdrant-1`)
+- split tunneling (2026-11-13): Telegram → `utun4`; Cloud.ru, GigaChat, GitHub,
+  S3, DeepSeek → `en0` (напрямую); VPS SSH — напрямую
+- бэкапы: `backups/2026-11-13/` (Qdrant snapshot, PostgreSQL dump, corpus/index/KB, PDF)
 
 Блокер снят 2026-11-12: AmneziaWG (`awg-quick@awg0`, split tunnel) поднят,
 `api.telegram.org` доступен, бот на VPS поллит Telegram.
@@ -68,20 +82,32 @@ VPS (ultraVDS):
 - KB: `data/kb/terms.jsonl` (400), `graph.json` (97 узлов / 116 рёбер), `outline.json` (37 стандартов)
 - BM25: `data/index/bm25.pkl` (~6.5 МБ), не зависит от модели эмбеддингов
 - переиндексация BGE-M3 на VPS: 150 с (31 чанк/с), стоимость ~0.74 ₽
+- артефакты данных: `dist/data-<corpus_version>.tar.zst` + `manifest.json`, S3 `data/`
+- BM25 обновляется тем же `embed`; путь `/data/index`, а не `/tmp/index`
 
 ## 7. Команды
 
 Локально:
 
 ```bash
-.venv/bin/python -m pytest -q tests          # 50 тестов
+.venv/bin/python -m pytest -q tests          # 65 тестов
 .venv/bin/python -m ruff check app bot eval tests
 .venv/bin/python scripts/ask.py "вопрос"
 .venv/bin/python scripts/eval_retrieval.py --gold eval/gold_set_v2.yaml --top-k 8
 .venv/bin/python eval/judge.py --gold eval/gold_set_v2.yaml --out eval/report_v2.json
 ```
 
-Ингест (только при необходимости, ~40–60 мин на VPS):
+Локальный контур (Docker Desktop):
+
+```bash
+make dev-up          # qdrant/postgres/redis
+make api             # uvicorn на 127.0.0.1:8000
+make test            # pytest
+make lint            # ruff
+make seed-qdrant     # восстановить snapshot прода
+```
+
+Ингест (локально, только при необходимости):
 
 ```bash
 python -m app.cli ingest --source data/source --out data/corpus
@@ -93,7 +119,7 @@ python -m app.cli embed --corpus data/corpus --index data/index --qdrant-url htt
 ```bash
 sudo docker compose -f deploy/docker-compose.yml run --rm \
   -e EMBEDDING_PROVIDER=cloudru -e QDRANT_COLLECTION=gost_chunks_bge_m3 \
-  app python -m app.cli embed --corpus /data/corpus --index /tmp/index \
+  app python -m app.cli embed --corpus /data/corpus --index /data/index \
   --qdrant-url http://qdrant:6333
 ```
 
@@ -133,18 +159,25 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 
 ## 9. Тесты и метрики (v3.1, BGE-M3)
 
-- `pytest`: **64 passed**
+- `pytest`: **65 passed**; ruff clean
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **0.98 (49/50)**,
   faithfulness/relevancy 0.96/0.98, citation 0.951, citation recall **1.000 (64/64)**
 - gold-KB (10): pass **0.90 (9/10)**; KB10 (внешние ссылки) — известный провал
 - M04: **pass** (факт-карточка 71484.2 п. 5.2 / 72663 п. 8.1)
-- известные провалы: TB01 (таблица 6.3), KB10; E02/T01/M04 закрыты
+- TB01: gold неполный — в PDF 8 строк (2 на с. 8 + 6 на с. 9), в gold 2;
+  исправление gold + парсер/чанкер (этап 7 плана 08)
 - reranker `bge-reranker-v2-m3`: A/B recall@8 1.000 → 0.740, top1 37 → 23 — **не используется**
 
 ## 10. Известные проблемы
 
+- 2026-11-13: VPS — только runtime; `.vscode-server` удалён, build cache очищен
+- GigaChat: `verify=False`; в certifi нет Russian Trusted CA — исправить (этап 6)
+- BM25: документированный `--index /tmp/index` не обновлял `bm25.pkl` — исправлено
+- GitHub: `PBondarevOctaneRent` имеет только `pull`; `gh secret set` → 403,
+  секреты добавляет владелец репозитория
+- deploy-ключ `~/.ssh/vps_deploy_key` добавлен в VPS `authorized_keys`, проверен
 - Telegram с VPS работает через AmneziaWG (`awg-quick@awg0`, split tunnel):
   DNS `100.64.0.1` недоступен, фактически используется `8.8.8.8` через туннель
   (PostUp `resolvectl dns awg0 8.8.8.8; domain awg0 ~telegram.org`)
@@ -159,19 +192,20 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 - M04: comparison-атрибуция закрыта факт-карточкой (71484.2 п. 5.2 — 15 характеристик,
   72663 п. 8.1 — измеримые показатели); остались TB01 (сложная таблица) и KB10 (внешние ссылки)
 - reranker отклонён по результатам A/B (ухудшает recall/top1)
-- клиент Qdrant 1.20.0 против сервера 1.12.4 — warning, запинить клиент <1.13
+- клиент Qdrant 1.20.0 против сервера 1.12.4 — warning; запинен `<1.13` (этап 0)
 
 ## 11. План
 
-`plans/06-plan-v3.md` (ревизия 1.1):
+`plans/08-plan-v3.2-local-first.md` (ревизия 1.0):
 
-0. переезд на VPS + AmneziaWG (0.2a) — блокирующий
-1. PDF-ссылки и inline-кнопки
-2. база знаний (только определения из «Термины и определения», ~150; граф 91 ребро)
-3. `/audit` в боте + usage в PostgreSQL
-4. Redis-кэш/лок, антифлуд, клавиатура, `/reindex`, query expansion
-5. безопасность и тесты (gitleaks, PII, circuit breaker, e2e/load)
-6. gold-KB, оценка, docs, релиз v3.0.0
+0. версия/бэкапы, локальный контур, CI, очистка VPS, CD, данные, сеть/CA
+7. TB01 — таблица 6.3
+8. KB10 — внешние ссылки
+9. аудит: ≥120 требований из ≥10 ГОСТов
+10. `/audit` + usage в PostgreSQL
+11. релиз
+
+Релизы: `v3.1.0` (TB01, KB10, инфраструктура), затем `v3.2.0` (аудит + `/audit`).
 
 ## 12. Чек-лист приёмки этапа 0
 
@@ -185,9 +219,9 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 
 ## 13. Инструкция агенту (кратко)
 
-1. Проверить состояние VPS, ничего не менять до понимания картины.
-2. Выполнить этап 0.2a (AmneziaWG, split tunnel) строго по плану.
+1. Работать локально; VPS не использовать для разработки.
+2. Перед изменениями — бэкап (`backups/`), после этапа — тесты, ruff, коммит, пуш.
 3. Любое отклонение — стоп и вопрос владельцу.
-4. После VPN перезапустить бот, проверить чек-лист этапа 0.
-5. Далее этапы 1–6: тесты, коммит, пуш, короткий отчёт после каждого этапа.
+4. VPS — только деплой готового образа/данных; VS Code Server не возвращать.
+5. Секреты не печатать; при 403 на GitHub — остановиться и дать инструкцию владельцу.
 
