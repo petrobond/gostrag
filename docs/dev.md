@@ -36,7 +36,7 @@ curl -s -X POST http://127.0.0.1:8000/api/ask \
 
 `deploy/.env` — локальный файл (gitignored, 600). В нём:
 - `QDRANT_URL=http://localhost:6335`;
-- `QDRANT_COLLECTION=gost_chunks_bge_m3`;
+- `QDRANT_COLLECTION=gost_chunks_bge_m3_v2`;
 - `EMBEDDING_PROVIDER=cloudru`;
 - `DATA_*`, `INDEX_DIR`, `REPORTS_DIR` — абсолютные локальные пути;
 - ключи Cloud.ru/GigaChat/DeepSeek/S3 — из `secrets/`, не печатать.
@@ -83,6 +83,6 @@ Qdrant snapshot:
 
 ```bash
 .venv/bin/python scripts/qdrant_snapshot.py download \
-  --url http://localhost:6335 --collection gost_chunks_bge_m3 \
+  --url http://localhost:6335 --collection gost_chunks_bge_m3_v2 \
   --out backups/$(date +%F)/qdrant.snapshot
 ```
