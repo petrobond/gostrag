@@ -75,3 +75,28 @@ curl -s http://localhost:8000/health
 | 429 | 1 поток занят | очередь, retry, DeepSeek |
 | 413 | промпт больше контекста | уменьшить top-K |
 | Пустые ответы | индекс не готов | проверить `/health`, переиндексировать |
+
+## 9. VPS: очистка 2026-11-13
+
+VPS `ultra` переведён в режим **runtime-only**: без VS Code Server, сборок,
+ingest и правок кода. Разработка — только локально.
+
+| Параметр | До | После |
+|---|---|---|
+| Диск `/` | 19 ГБ / 49 ГБ (41%) | 14 ГБ / 49 ГБ (30%) |
+| Docker build cache | 4.894 ГБ | 0 |
+| `~/.vscode-server` | 803 МБ | удалён |
+| `curlimages/curl` | 35.9 МБ | удалён |
+| `ProBack_SA` | active | active |
+| gostrag | 5 сервисов healthy | 5 сервисов healthy |
+
+Не трогать: `ProBack_SA` (`proback-rag-bot.service`), AWG `awg0`,
+`deploy/.env`, volumes `gostrag_*`. VS Code Server на VPS не возвращать.
+
+Проверка после очистки:
+
+```bash
+ssh ultra 'df -h /; free -h; sudo docker system df; systemctl is-active proback-rag-bot'
+curl -s localhost:8000/health
+```
+
