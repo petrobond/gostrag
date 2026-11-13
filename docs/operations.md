@@ -19,9 +19,9 @@ docker compose -f deploy/docker-compose.yml up -d qdrant
 # 1. Добавить PDF в data/source
 # 2. Пересобрать чанки
 .venv/bin/python -m app.cli ingest --source data/source --out data/corpus
-# 3. Переиндексировать
+# 3. Переиндексировать (локально Qdrant на 6335; на VPS — 6333)
 .venv/bin/python -m app.cli embed --corpus data/corpus --index data/index \
-  --qdrant-url http://localhost:6333
+  --qdrant-url http://localhost:6335
 # 4. Удалить устаревшие точки
 .venv/bin/python scripts/cleanup_qdrant.py
 # 5. Обновить версию корпуса в deploy/.env

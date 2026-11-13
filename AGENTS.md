@@ -159,7 +159,7 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 
 ## 9. Тесты и метрики (v3.1, BGE-M3)
 
-- `pytest`: **65 passed**; ruff clean
+- `pytest`: **66 passed**; ruff clean
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **0.98 (49/50)**,
