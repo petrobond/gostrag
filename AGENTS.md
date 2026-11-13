@@ -44,8 +44,8 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
   - локальная `intfloat/multilingual-e5-large` (ONNX, volume `gostrag_fastembed_cache`)
     — fallback: `EMBEDDING_PROVIDER=local`; модель в образе не нужна
   - резерв API: `Qwen/Qwen3-Embedding-0.6B` (1024d, recall@8 1.000, pass 0.946)
-  - таблицы: T01 закрыт слиянием дублей `chunk_id`; TB01 (таблица 6.3) — дефект
-    gold подтверждён по PDF: 8 строк, а не 2; исправление — этап 7 плана 08
+  - таблицы: T01 закрыт слиянием дублей `chunk_id`; TB01 (таблица 6.3) — 8 строк
+    по PDF, закрыт в v3.2.0
 
 ## 5. Где что запущено
 
