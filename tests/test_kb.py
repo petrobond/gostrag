@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.kb.kb import KnowledgeBase
-from app.rag.generator import Answer
+from app.rag.generator import Answer, Citation
 from app.rag.service import AskService
 
 
@@ -83,7 +83,10 @@ def test_external_links_intent_and_deterministic_answer():
         chunks=FakeChunks(),
         _is_external_links_question=AskService._is_external_links_question,
     )
-    answer = Answer(answer="Ответ LLM")
+    answer = Answer(
+        answer="Ответ LLM",
+        citations=[Citation(gost="ГОСТ Р 71562—2024", clause="6.4", page=12, valid=True)],
+    )
     AskService._append_kb_links(service, answer, question, ["ГОСТ Р 71562—2024"])
 
     assert answer.refused is False
@@ -92,7 +95,7 @@ def test_external_links_intent_and_deterministic_answer():
     assert "ГОСТ Р 70462.1—2022" in answer.answer
     assert "ГОСТ Р 57700.37—2021" in answer.answer
     assert "ГОСТ Р 71476—2024" not in answer.answer
-    assert answer.citations
+    assert len(answer.citations) == 1
     assert answer.citations[0].gost == "ГОСТ Р 71562—2024"
     assert answer.citations[0].clause == "2"
     assert answer.citations[0].page == 5

@@ -312,6 +312,7 @@ class AskService:
             )
             citation_clause = str(preferred.get("clause", "2"))
             citation_page = int(preferred.get("page", 0) or 0)
+            answer.citations = []
         elif "ссыл" in query and "на какие" not in query and "ссылаются" in query:
             data = self.kb.neighbors(gosts[0])
             sources = [edge["source"] for edge in data["incoming"]]
