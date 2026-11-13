@@ -1,0 +1,12 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: ${APP_IMAGE:-gostrag:local}
+
+  bot:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: ${APP_IMAGE:-gostrag:local}

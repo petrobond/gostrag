@@ -1,11 +1,14 @@
 name: gostrag
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   app:
-    image: gostrag:latest
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    image: ${APP_IMAGE:-gostrag:latest}
     env_file:
       - .env
     ports:
@@ -24,13 +27,23 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
     restart: unless-stopped
 
   bot:
-    image: gostrag:latest
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    image: ${APP_IMAGE:-gostrag:latest}
     command: ["python", "-m", "bot.main"]
     env_file:
       - .env
@@ -43,8 +56,37 @@ services:
       - fastembed_cache:/app/.cache/fastembed
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
+    logging: *default-logging
     restart: unless-stopped
+
+  data:
+    image: ${APP_IMAGE:-gostrag:latest}
+    profiles: ["data"]
+    env_file:
+      - .env
+    volumes:
+      - ../data/source:/data/source:ro
+      - ../data/corpus:/data/corpus
+      - ../data/index:/data/index
+      - ../data/kb:/data/kb
+    depends_on:
+      qdrant:
+        condition: service_started
+    command:
+      [
+        "python",
+        "-m",
+        "app.cli",
+        "embed",
+        "--corpus",
+        "/data/corpus",
+        "--index",
+        "/data/index",
+        "--qdrant-url",
+        "http://qdrant:6333",
+      ]
+    logging: *default-logging
 
   qdrant:
     image: qdrant/qdrant:v1.12.4
@@ -52,6 +94,7 @@ services:
       - qdrant_storage:/qdrant/storage
     ports:
       - "127.0.0.1:6333:6333"
+    logging: *default-logging
     restart: unless-stopped
 
   postgres:
@@ -70,6 +113,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    logging: *default-logging
     restart: unless-stopped
 
   redis:
@@ -84,6 +128,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    logging: *default-logging
     restart: unless-stopped
 
 volumes:
@@ -91,3 +136,4 @@ volumes:
   postgres_data:
   redis_data:
   fastembed_cache:
+
