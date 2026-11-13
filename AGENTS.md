@@ -29,13 +29,13 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
 
 - `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст
 - `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready)
-- версия продукта: **3.2.0** (pyproject = APP_VERSION = `/health`)
+- версия продукта: **3.2.1** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
-- Qdrant — коллекция `gost_chunks_bge_m3` (прод, 4452 точки), `gost_chunks` — старая коллекция e5 (rollback), v1.12.4
+- Qdrant — коллекция `gost_chunks_bge_m3_v2` (прод, 4396 точек); `gost_chunks_bge_m3` (4452, старая) и `gost_chunks` (e5) — rollback, v1.12.4
 - KB/граф — `app/kb`, `data/kb`: 400 терминов, 97 узлов (37 корпусных + 60 внешних),
   116 рёбер (24 внутренних); команды `/kb`, `/term`, `/links`; 1-hop для cross_reference
-- Postgres 16 и Redis 7 — в compose; usage в PG пока не пишется (этап 3 плана)
+- Postgres 16 и Redis 7 — в compose; usage пишется в PG (`qa_log`, `usage_daily`), `/stats`
 - S3 (Yandex Object Storage) — 39 PDF в `gost/`, presigned URL + `#page`
 - LLM: GigaChat-3-Ultra (fallback Max → Pro → Lite → DeepSeek) — только API
 - Эмбеддинги: `BAAI/bge-m3` через Cloud.ru Foundation Models API
@@ -121,7 +121,7 @@ python -m app.cli data-fetch --version 2026.11.13 --dest /data
 
 ```bash
 sudo docker compose -f deploy/docker-compose.yml run --rm \
-  -e EMBEDDING_PROVIDER=cloudru -e QDRANT_COLLECTION=gost_chunks_bge_m3 \
+  -e EMBEDDING_PROVIDER=cloudru -e QDRANT_COLLECTION=gost_chunks_bge_m3_v2 \
   app python -m app.cli embed --corpus /data/corpus --index /data/index \
   --qdrant-url http://qdrant:6333
 ```
@@ -130,7 +130,7 @@ sudo docker compose -f deploy/docker-compose.yml run --rm \
 
 ```bash
 sudo docker compose -f deploy/docker-compose.yml run --rm \
-  -e EMBEDDING_PROVIDER=cloudru -e QDRANT_COLLECTION=gost_chunks_bge_m3 \
+  -e EMBEDDING_PROVIDER=cloudru -e QDRANT_COLLECTION=gost_chunks_bge_m3_v2 \
   -v /opt/gostrag:/repo -w /repo app \
   python scripts/eval_retrieval.py --gold eval/gold_set_v2.yaml --top-k 8 \
   --qdrant-url http://qdrant:6333
@@ -151,7 +151,7 @@ cd /opt/gostrag
 sudo docker compose -f deploy/docker-compose.yml ps
 sudo docker compose -f deploy/docker-compose.yml logs --tail=100 bot
 curl -s localhost:8000/health
-curl -s localhost:6333/collections/gost_chunks | head -c 300
+curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 ```
 
 ## 8. Секреты
@@ -162,16 +162,14 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 
 ## 9. Тесты и метрики (v3.2, BGE-M3)
 
-- `pytest`: **78 passed**; ruff clean
+- `pytest`: **80 passed**; ruff clean (app bot eval tests)
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
-- gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **0.98 (49/50)**,
-  faithfulness/relevancy 0.96/0.98, citation 0.951, citation recall **1.000 (64/64)**
-- gold-KB (10): pass **0.90 (9/10)**; KB10 исправлен локально (targeted pass 1.0),
-  полный прогон — на VPS
-- M04: **pass** (факт-карточка 71484.2 п. 5.2 / 72663 п. 8.1)
-- TB01: gold исправлен по PDF (8 строк); targeted judge **pass 1.0**; полный gold v3 —
-  на VPS
+- gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **1.000 (50/50)**,
+  faithfulness/relevancy 0.96/0.96, citation 1.0, citation recall **1.000 (58/58)**;
+  M04, X01, TB01, KB10 — pass
+- gold-KB (10): **1.000 (10/10)**, citation **28/28** (v3.2.1); KB07 —
+  «стандарты корпуса» → внутренняя ветка 71476, п. 2
 - audit v3.2: **157 требований / 15 ГОСТов**, N/A 15 (9.55%), coverage **90.45%**,
   compliance applicable **74.65%**; отчёт `docs/reports/3.2.0/1/`
 - reranker `bge-reranker-v2-m3`: A/B recall@8 1.000 → 0.740, top1 37 → 23 — **не используется**
@@ -195,8 +193,11 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 - Cloud.ru — внешняя зависимость на каждый запрос: retry на 429/5xx, таймаут 60 с;
   при 502/503 dense-поиск отключается, ответ идёт по BM25 (`dense_search_unavailable`);
   проверено 2026-11-13 во время аварии Cloud.ru
-- M04: comparison-атрибуция закрыта факт-карточкой (71484.2 п. 5.2 — 15 характеристик,
-  72663 п. 8.1 — измеримые показатели); TB01 и KB10 исправлены, полный gold — на VPS
+- M04/TB01/KB10/X01: закрыты; gold v3 **50/50** (v3.2.0)
+- KB07: в v3.2.0 external-links перехватывал «стандарты корпуса» и отдавал
+  внешние ГОСТы; в v3.2.1 — внутренняя ветка графа (71476, п. 2)
+- deploy: `data/kb` после root-контейнера не давал `git checkout`; добавлен
+  chown `data/*` перед checkout (коммит 56bee3e, входит в v3.2.1)
 - reranker отклонён по результатам A/B (ухудшает recall/top1)
 - клиент Qdrant 1.20.0 против сервера 1.12.4 — warning; запинен `<1.13` (этап 0)
 
@@ -211,7 +212,8 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 10. `/audit` + usage в PostgreSQL
 11. релиз
 
-Релизы: `v3.1.0` (TB01, KB10, инфраструктура), затем `v3.2.0` (аудит + `/audit`).
+Релизы: `v3.1.0` (TB01, KB10, инфраструктура), `v3.2.0` (аудит + `/audit`),
+`v3.2.1` (KB07 «стандарты корпуса», deploy chown).
 
 ## 12. Чек-лист приёмки этапа 0
 
