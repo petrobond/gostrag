@@ -31,6 +31,25 @@
 
 Секреты не коммитить и не печатать.
 
+## 2.1. Переменные репозитория
+
+| Variable | Значение | Назначение |
+|---|---|---|
+| `DATA_VERSION` | `2026.11.13` | скачать data-артефакт и переиндексировать на VPS |
+| `QDRANT_COLLECTION` | `gost_chunks_bge_m3_v2` | новая коллекция после переиндексации |
+| `CORPUS_VERSION` | `2026.11.13` | версия корпуса в `/health` и отчётах |
+
+Устанавливаются владельцем:
+
+```bash
+gh variable set DATA_VERSION -R petrobond/gostrag --body 2026.11.13
+gh variable set QDRANT_COLLECTION -R petrobond/gostrag --body gost_chunks_bge_m3_v2
+gh variable set CORPUS_VERSION -R petrobond/gostrag --body 2026.11.13
+gh variable list -R petrobond/gostrag
+```
+
+Если `DATA_VERSION` пуст, deploy не трогает данные и только обновляет образ.
+
 ## 3. Блокер 2026-11-13
 
 `gh secret set` возвращает 403:

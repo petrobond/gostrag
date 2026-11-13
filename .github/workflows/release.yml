@@ -71,8 +71,13 @@ jobs:
           TAG: ${{ github.ref_name }}
           APP_IMAGE: ${{ env.IMAGE }}:${{ github.ref_name }}
           APP_VERSION: ${{ needs.build.outputs.version }}
+          DATA_VERSION: ${{ vars.DATA_VERSION }}
+          QDRANT_COLLECTION: ${{ vars.QDRANT_COLLECTION }}
+          CORPUS_VERSION: ${{ vars.CORPUS_VERSION }}
         run: |
           ssh -i ~/.ssh/id_ed25519 \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "TAG='$TAG' APP_IMAGE='$APP_IMAGE' APP_VERSION='$APP_VERSION' bash -s" \
+            "TAG='$TAG' APP_IMAGE='$APP_IMAGE' APP_VERSION='$APP_VERSION' \
+            DATA_VERSION='$DATA_VERSION' QDRANT_COLLECTION='$QDRANT_COLLECTION' \
+            CORPUS_VERSION='$CORPUS_VERSION' bash -s" \
             < scripts/remote_deploy.sh

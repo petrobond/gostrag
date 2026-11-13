@@ -4,6 +4,8 @@ import argparse
 import asyncio
 import hashlib
 import json
+import shutil
+import tarfile
 import time
 import uuid
 from collections import Counter
@@ -11,6 +13,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
+import boto3
 from qdrant_client.http import models as qm
 
 from app.config import get_settings
@@ -184,6 +187,77 @@ def cmd_embed(args: argparse.Namespace) -> None:
 
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def cmd_data_fetch(args: argparse.Namespace) -> None:
+    settings = get_settings()
+    bucket = args.bucket or settings.s3_bucket
+    if not bucket:
+        raise SystemExit("S3_BUCKET is not configured")
+    version = args.version
+    dest = Path(args.dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    staging = dest / f".fetch-{version}"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+
+    client = boto3.client(
+        "s3",
+        endpoint_url=settings.s3_endpoint,
+        aws_access_key_id=settings.s3_access_key,
+        aws_secret_access_key=settings.s3_secret_key,
+        region_name=settings.s3_region,
+    )
+    base = f"{args.prefix.strip('/')}/{version}"
+    archive = staging / f"data-{version}.tar.gz"
+    manifest_path = staging / f"manifest-{version}.json"
+    client.download_file(bucket, f"{base}/{manifest_path.name}", str(manifest_path))
+    client.download_file(bucket, f"{base}/{archive.name}", str(archive))
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if _sha256(archive) != manifest["archive_sha256"]:
+        raise SystemExit("archive checksum mismatch")
+    extracted = staging / "extract"
+    with tarfile.open(archive, "r:gz") as tar:
+        tar.extractall(extracted, filter="data")
+    for name in ("corpus", "index", "kb"):
+        if not (extracted / name).exists():
+            raise SystemExit(f"data archive has no {name}/")
+
+    backup = dest / "backups" / f"data-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+    backup.mkdir(parents=True, exist_ok=True)
+    for name in ("corpus", "index", "kb"):
+        target = dest / name
+        if target.exists():
+            shutil.copytree(target, backup / name)
+        target.mkdir(parents=True, exist_ok=True)
+        for child in target.iterdir():
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        shutil.copytree(extracted / name, target, dirs_exist_ok=True)
+    print(
+        json.dumps(
+            {
+                "version": version,
+                "corpus_version": manifest.get("corpus_version"),
+                "counts": manifest.get("counts"),
+                "backup": str(backup),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="gostrag")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -202,6 +276,13 @@ def main() -> None:
     embed.add_argument("--index", default="data/index")
     embed.add_argument("--qdrant-url", default="")
     embed.set_defaults(func=cmd_embed)
+
+    fetch = sub.add_parser("data-fetch", help="download a data artifact from S3")
+    fetch.add_argument("--version", required=True)
+    fetch.add_argument("--bucket", default="")
+    fetch.add_argument("--prefix", default="data")
+    fetch.add_argument("--dest", default="/data")
+    fetch.set_defaults(func=cmd_data_fetch)
 
     args = parser.parse_args()
     args.func(args)

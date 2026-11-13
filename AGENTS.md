@@ -114,6 +114,7 @@ make seed-qdrant     # восстановить snapshot прода
 ```bash
 python -m app.cli ingest --source data/source --out data/corpus
 python -m app.cli embed --corpus data/corpus --index data/index --qdrant-url http://qdrant:6333
+python -m app.cli data-fetch --version 2026.11.13 --dest /data
 ```
 
 Переиндексация эмбеддингов через Cloud.ru (VPS, ~3 мин):
