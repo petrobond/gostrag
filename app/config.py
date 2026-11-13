@@ -21,6 +21,7 @@ class Settings(BaseSettings):
         default="https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
         alias="GIGACHAT_AUTH_URL",
     )
+    gigachat_ca_bundle: str = Field(default="", alias="GIGACHAT_CA_BUNDLE")
     gigachat_model_ultra: str = Field(default="GigaChat-3-Ultra", alias="GIGACHAT_MODEL_ULTRA")
     gigachat_model_max: str = Field(default="GigaChat-2-Max", alias="GIGACHAT_MODEL_MAX")
     gigachat_model_pro: str = Field(default="GigaChat-2-Pro", alias="GIGACHAT_MODEL_PRO")

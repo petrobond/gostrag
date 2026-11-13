@@ -35,6 +35,14 @@ ENV APP_VERSION=${APP_VERSION} \
     GIT_COMMIT=${GIT_COMMIT}
 
 WORKDIR /app
+COPY deploy/certs/*.crt /usr/local/share/ca-certificates/
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    GIGACHAT_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+
 COPY --from=builder /wheels /wheels
 RUN if [ "$INSTALL_LOCAL_EMBEDDINGS" = "true" ]; then \
         pip install --no-cache-dir --no-index --find-links=/wheels 'gostrag[local]'; \

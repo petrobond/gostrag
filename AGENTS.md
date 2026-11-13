@@ -174,7 +174,7 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 ## 10. Известные проблемы
 
 - 2026-11-13: VPS — только runtime; `.vscode-server` удалён, build cache очищен
-- GigaChat: `verify=False`; в certifi нет Russian Trusted CA — исправить (этап 6)
+- GigaChat: `verify=True`; Russian Trusted Root/Sub CA в `deploy/certs` (этап 6 закрыт)
 - BM25: документированный `--index /tmp/index` не обновлял `bm25.pkl` — исправлено
 - GitHub: `PBondarevOctaneRent` имеет только `pull`; `gh secret set` → 403,
   секреты добавляет владелец репозитория

@@ -32,6 +32,7 @@ class GigaChatClient:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.verify: str | bool = settings.gigachat_ca_bundle or True
         self._token: str = ""
         self._expires_at: float = 0.0
 
@@ -44,7 +45,7 @@ class GigaChatClient:
             "RqUID": str(uuid.uuid4()),
             "Authorization": f"Basic {self.settings.gigachat_credentials}",
         }
-        async with httpx.AsyncClient(verify=False, timeout=30) as client:
+        async with httpx.AsyncClient(verify=self.verify, timeout=30) as client:
             response = await client.post(
                 self.settings.gigachat_auth_url,
                 headers=headers,
@@ -66,7 +67,7 @@ class GigaChatClient:
         }
 
     async def models(self) -> list[dict]:
-        async with httpx.AsyncClient(verify=False, timeout=30) as client:
+        async with httpx.AsyncClient(verify=self.verify, timeout=30) as client:
             response = await client.get(
                 f"{self.settings.gigachat_base_url}/models", headers=await self._headers()
             )
@@ -86,7 +87,7 @@ class GigaChatClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        async with httpx.AsyncClient(verify=False, timeout=self.settings.request_timeout_sec) as client:
+        async with httpx.AsyncClient(verify=self.verify, timeout=self.settings.request_timeout_sec) as client:
             response = await client.post(
                 f"{self.settings.gigachat_base_url}/chat/completions",
                 headers=await self._headers(),
@@ -105,7 +106,7 @@ class GigaChatClient:
         )
 
     async def embeddings(self, model: str, texts: list[str]) -> list[list[float]]:
-        async with httpx.AsyncClient(verify=False, timeout=self.settings.request_timeout_sec) as client:
+        async with httpx.AsyncClient(verify=self.verify, timeout=self.settings.request_timeout_sec) as client:
             response = await client.post(
                 f"{self.settings.gigachat_base_url}/embeddings",
                 headers=await self._headers(),
