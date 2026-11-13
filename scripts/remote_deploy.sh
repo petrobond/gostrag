@@ -25,6 +25,7 @@ sudo -n chmod 600 "backups/deploy.env.$STAMP"
 curl -fsS -X POST "http://localhost:6333/collections/$PREV_COLLECTION/snapshots" >/dev/null || true
 
 git fetch --tags origin
+sudo -n chown -R gostrag:gostrag data/kb data/corpus data/index data/source 2>/dev/null || true
 git checkout -f "$TAG"
 
 sudo -n sed -i "s|^APP_IMAGE=.*|APP_IMAGE=$APP_IMAGE|" deploy/.env
