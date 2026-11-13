@@ -17,6 +17,9 @@ data/tmp/
 artifacts/
 logs/
 *.log
+backups/
+dist/
+.local/
 
 # --- python ---
 .venv/
