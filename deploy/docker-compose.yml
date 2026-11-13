@@ -57,6 +57,8 @@ services:
     depends_on:
       app:
         condition: service_healthy
+    healthcheck:
+      disable: true
     logging: *default-logging
     restart: unless-stopped
 
@@ -65,6 +67,8 @@ services:
     profiles: ["data"]
     env_file:
       - .env
+    healthcheck:
+      disable: true
     volumes:
       - ../data/source:/data/source:ro
       - ../data/corpus:/data/corpus
