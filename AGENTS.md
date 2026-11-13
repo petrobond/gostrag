@@ -160,17 +160,20 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 `ultraVDS`, `gigachatAPI`, `telegram`, `object_storage`, `deepseekApi`,
 `yandexCloud`, `git`, `amnezia.conf` (приватные ключи AWG), `amneziaVPN`.
 
-## 9. Тесты и метрики (v3.1, BGE-M3)
+## 9. Тесты и метрики (v3.2, BGE-M3)
 
-- `pytest`: **66 passed**; ruff clean
+- `pytest`: **78 passed**; ruff clean
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **0.98 (49/50)**,
   faithfulness/relevancy 0.96/0.98, citation 0.951, citation recall **1.000 (64/64)**
-- gold-KB (10): pass **0.90 (9/10)**; KB10 (внешние ссылки) — известный провал
+- gold-KB (10): pass **0.90 (9/10)**; KB10 исправлен локально (targeted pass 1.0),
+  полный прогон — на VPS
 - M04: **pass** (факт-карточка 71484.2 п. 5.2 / 72663 п. 8.1)
-- TB01: gold неполный — в PDF 8 строк (2 на с. 8 + 6 на с. 9), в gold 2;
-  исправление gold + парсер/чанкер (этап 7 плана 08)
+- TB01: gold исправлен по PDF (8 строк); targeted judge **pass 1.0**; полный gold v3 —
+  на VPS
+- audit v3.2: **157 требований / 15 ГОСТов**, N/A 15 (9.55%), coverage **90.45%**,
+  compliance applicable **74.65%**; отчёт `docs/reports/3.2.0/1/`
 - reranker `bge-reranker-v2-m3`: A/B recall@8 1.000 → 0.740, top1 37 → 23 — **не используется**
 
 ## 10. Известные проблемы
@@ -178,8 +181,8 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 - 2026-11-13: VPS — только runtime; `.vscode-server` удалён, build cache очищен
 - GigaChat: `verify=True`; Russian Trusted Root/Sub CA в `deploy/certs` (этап 6 закрыт)
 - BM25: документированный `--index /tmp/index` не обновлял `bm25.pkl` — исправлено
-- GitHub: `PBondarevOctaneRent` имеет только `pull`; `gh secret set` → 403,
-  секреты добавляет владелец репозитория
+- GitHub: секреты `VPS_SSH_KEY`/`VPS_HOST`/`VPS_USER` добавлены владельцем;
+  environment `production` с required reviewer; deploy — по тегу
 - deploy-ключ `~/.ssh/vps_deploy_key` добавлен в VPS `authorized_keys`, проверен
 - Telegram с VPS работает через AmneziaWG (`awg-quick@awg0`, split tunnel):
   DNS `100.64.0.1` недоступен, фактически используется `8.8.8.8` через туннель
@@ -193,7 +196,7 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
   при 502/503 dense-поиск отключается, ответ идёт по BM25 (`dense_search_unavailable`);
   проверено 2026-11-13 во время аварии Cloud.ru
 - M04: comparison-атрибуция закрыта факт-карточкой (71484.2 п. 5.2 — 15 характеристик,
-  72663 п. 8.1 — измеримые показатели); остались TB01 (сложная таблица) и KB10 (внешние ссылки)
+  72663 п. 8.1 — измеримые показатели); TB01 и KB10 исправлены, полный gold — на VPS
 - reranker отклонён по результатам A/B (ухудшает recall/top1)
 - клиент Qdrant 1.20.0 против сервера 1.12.4 — warning; запинен `<1.13` (этап 0)
 
