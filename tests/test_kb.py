@@ -77,6 +77,9 @@ def test_external_links_intent_and_deterministic_answer():
     question = "Какие внешние стандарты упоминает ГОСТ Р 71562—2024?"
     assert AskService._is_external_links_question(question.lower())
     assert AskService._is_external_links_question("нормативные ссылки")
+    assert not AskService._is_external_links_question(
+        "на какой стандарт ссылается ГОСТ Р 71540—2024 в разделе нормативных ссылок"
+    )
 
     service = SimpleNamespace(
         kb=kb(),

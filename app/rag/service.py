@@ -365,9 +365,12 @@ class AskService:
 
     @staticmethod
     def _is_external_links_question(query: str) -> bool:
+        if "внешн" in query:
+            return True
+        if "раздел" in query:
+            return False
         return (
-            "внешн" in query
-            or "нормативн" in query
+            "нормативн" in query
             or ("упомина" in query and "стандарт" in query)
             or ("на какие" in query and "стандарт" in query and "ссыла" in query)
         )
@@ -467,7 +470,11 @@ class AskService:
                     sentence = _sentence(text, "измерен")
                     if sentence:
                         score = (2 if "показател" in title else 0) + (
-                            1 if chunk.clause == "8" or chunk.clause.startswith("8.1") else 0
+                            2
+                            if chunk.clause.startswith("8.1")
+                            else 1
+                            if chunk.clause.startswith("8.")
+                            else 0
                         )
                         if best_indicator is None or score > best_indicator[0]:
                             best_indicator = (score, chunk, sentence)
@@ -482,11 +489,15 @@ class AskService:
             (
                 fact
                 for fact in facts
-                if "показател" in fact[2].lower() and "измерен" in fact[2].lower()
+                if (quant is None or fact[0] != quant[0])
+                and "измерен" in fact[2].lower()
             ),
             None,
         )
-        if quant is not None and indicator is not None:
+        deterministic = (
+            quant is not None and indicator is not None and indicator[0] != quant[0]
+        )
+        if deterministic:
             quant_clause = quant[1].clause.split("#")[0]
             indicator_clause = indicator[1].clause.split("#")[0]
             headline = (
@@ -500,8 +511,11 @@ class AskService:
                 ).strip()
             else:
                 answer.answer = f"{headline}\n\n{answer.answer.strip()}"
+        selected = [quant, indicator] if deterministic else facts
+        if deterministic:
+            answer.citations = []
         lines = ["Ключевые факты (из контекста):"]
-        for gost, chunk, text in facts:
+        for gost, chunk, text in selected:
             lines.append(f"• {gost}, п. {chunk.clause}, с. {chunk.page}: {text[:300]}")
             if not any(
                 citation.gost == gost and citation.clause == chunk.clause
@@ -519,7 +533,12 @@ class AskService:
                         quote_valid=True,
                     )
                 )
-        answer.answer = f"{answer.answer.rstrip()}\n\n" + "\n".join(lines)
+        if deterministic:
+            answer.answer = f"{headline}\n\n" + "\n".join(lines)
+            answer.model = "deterministic:comparison"
+            answer.provider = "rules"
+        else:
+            answer.answer = f"{answer.answer.rstrip()}\n\n" + "\n".join(lines)
 
     @staticmethod
     def _append_enumeration_titles(answer: str, chunks: list[RetrievedChunk]) -> str:
