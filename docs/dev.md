@@ -43,6 +43,18 @@ curl -s -X POST http://127.0.0.1:8000/api/ask \
 
 `Makefile` дополнительно экспортирует те же значения для скриптов.
 
+## 3.1. Локальные эмбеддинги (fallback)
+
+Базовый образ и по умолчанию `EMBEDDING_PROVIDER=cloudru` не содержат
+`fastembed`/ONNX. Для локального fallback:
+
+```bash
+.venv/bin/pip install -e '.[local]'
+EMBEDDING_PROVIDER=local make api
+```
+
+В Docker: `--build-arg INSTALL_LOCAL_EMBEDDINGS=true`.
+
 ## 4. Тесты и оценка
 
 ```bash

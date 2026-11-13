@@ -1,5 +1,7 @@
 FROM python:3.12-slim AS builder
 
+ARG INSTALL_LOCAL_EMBEDDINGS=false
+
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -11,9 +13,15 @@ WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY app ./app
 COPY bot ./bot
-RUN pip install --upgrade pip && pip wheel --no-cache-dir --wheel-dir /wheels .
+RUN pip install --upgrade pip \
+    && pip wheel --no-cache-dir --wheel-dir /wheels . \
+    && if [ "$INSTALL_LOCAL_EMBEDDINGS" = "true" ]; then \
+        pip wheel --no-cache-dir --wheel-dir /wheels '.[local]'; \
+    fi
 
 FROM python:3.12-slim AS runtime
+
+ARG INSTALL_LOCAL_EMBEDDINGS=false
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -28,7 +36,11 @@ ENV APP_VERSION=${APP_VERSION} \
 
 WORKDIR /app
 COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir --no-index --find-links=/wheels gostrag \
+RUN if [ "$INSTALL_LOCAL_EMBEDDINGS" = "true" ]; then \
+        pip install --no-cache-dir --no-index --find-links=/wheels 'gostrag[local]'; \
+    else \
+        pip install --no-cache-dir --no-index --find-links=/wheels gostrag; \
+    fi \
     && rm -rf /wheels
 
 COPY app ./app

@@ -14,7 +14,13 @@ def get_embedder(settings: Settings) -> Embedder:
         from app.embeddings.gigachat import GigaChatEmbedder
 
         return GigaChatEmbedder(settings)
-    from app.embeddings.local_e5 import LocalE5Embedder
+    try:
+        from app.embeddings.local_e5 import LocalE5Embedder
+    except ImportError as exc:
+        raise RuntimeError(
+            "local embeddings are not installed: use EMBEDDING_PROVIDER=cloudru "
+            "or install gostrag[local]"
+        ) from exc
 
     return LocalE5Embedder(
         cache_dir=settings.embedding_cache_dir,

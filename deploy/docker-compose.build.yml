@@ -3,10 +3,14 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        INSTALL_LOCAL_EMBEDDINGS: ${INSTALL_LOCAL_EMBEDDINGS:-false}
     image: ${APP_IMAGE:-gostrag:local}
 
   bot:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        INSTALL_LOCAL_EMBEDDINGS: ${INSTALL_LOCAL_EMBEDDINGS:-false}
     image: ${APP_IMAGE:-gostrag:local}

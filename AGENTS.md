@@ -31,6 +31,7 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
 - `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready)
 - версия продукта: **3.1.0** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
+- образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
 - Qdrant — коллекция `gost_chunks_bge_m3` (прод, 4452 точки), `gost_chunks` — старая коллекция e5 (rollback), v1.12.4
 - KB/граф — `app/kb`, `data/kb`: 400 терминов, 97 узлов (37 корпусных + 60 внешних),
   116 рёбер (24 внутренних); команды `/kb`, `/term`, `/links`; 1-hop для cross_reference
@@ -184,8 +185,8 @@ curl -s localhost:6333/collections/gost_chunks | head -c 300
 - Режим `ASK_API_URL` (бот локально → API на VPS) закоммичен (70ed838),
   но **не одобрен и не используется**
 - RAM разгружена: app ~212 МБ, bot ~346 МБ, swap ~0.7 ГБ (было 4.65 ГБ);
-  `qdrant-client` всё ещё импортирует `fastembed`/ONNX (~100 МБ на процесс) —
-  вынести в optional extra при уборке
+  `fastembed`/ONNX вынесены в optional extra `local` — базовый образ и процессы
+  без них; для локального fallback нужен `pip install -e '.[local]'`
 - Cloud.ru — внешняя зависимость на каждый запрос: retry на 429/5xx, таймаут 60 с;
   при 502/503 dense-поиск отключается, ответ идёт по BM25 (`dense_search_unavailable`);
   проверено 2026-11-13 во время аварии Cloud.ru
