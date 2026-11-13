@@ -37,6 +37,10 @@ def render_markdown(findings: list[Finding], meta: dict) -> str:
     partial = sum(1 for f in findings if f.status == "partial")
     non_compliant = sum(1 for f in findings if f.status == "non_compliant")
     not_applicable = sum(1 for f in findings if f.status == "not_applicable")
+    applicable = total - not_applicable
+    coverage = (compliant + partial + non_compliant) / total
+    compliance_all = compliant / total
+    compliance_applicable = compliant / applicable if applicable else 0.0
 
     lines = [
         "# Отчёт аудита соответствия ГОСТам",
@@ -57,7 +61,9 @@ def render_markdown(findings: list[Finding], meta: dict) -> str:
         f"| Частично | {partial} |",
         f"| Не соответствует | {non_compliant} |",
         f"| Не применимо | {not_applicable} |",
-        f"| Compliance rate | {compliant / total:.2%} |",
+        f"| Coverage (оценено/всего) | {coverage:.2%} |",
+        f"| Compliance (все требования) | {compliance_all:.2%} |",
+        f"| Compliance (применимые) | {compliance_applicable:.2%} |",
         "",
         "## Результаты",
         "",
@@ -107,10 +113,18 @@ def write_report(
     )
 
     total = len(findings) or 1
+    compliant = sum(1 for finding in findings if finding.status == "compliant")
+    not_applicable = sum(1 for finding in findings if finding.status == "not_applicable")
+    applicable = total - not_applicable
     manifest = {
         **meta,
         "requirements_total": len(findings),
-        "compliance_rate": sum(1 for f in findings if f.status == "compliant") / total,
+        "not_applicable": not_applicable,
+        "applicable_total": applicable,
+        "coverage": (len(findings) - not_applicable) / total,
+        "compliance_all": compliant / total,
+        "compliance_applicable": compliant / applicable if applicable else 0.0,
+        "compliance_rate": compliant / total,
         "md_path": str(md_path),
         "json_path": str(json_path),
         "md_sha256": _hash(markdown),

@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-11-13T12:50:52.905916+00:00",
+  "version": "3.2.0",
+  "git_commit": "82e0c8f641a84421ff89d9794b8dec99db06628a",
+  "git_tag": "v3.1.0-1-g82e0c8f",
+  "tests": {
+    "command": "/Users/Lenovo/Projects/RAG_Timur/.venv/bin/python -m pytest -q tests",
+    "returncode": 0,
+    "output": "........................................................................ [ 93%]\n.....                                                                    [100%]\n=============================== warnings summary ===============================\n<frozen importlib._bootstrap>:488\n<frozen importlib._bootstrap>:488\n  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute\n\n<frozen importlib._bootstrap>:488\n<frozen importlib._bootstrap>:488\n  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute\n\n<frozen importlib._bootstrap>:488\n  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type swigvarlink has no __module__ attribute\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n77 passed, 5 warnings in 0.68s\n/Users/Lenovo/Projects/RAG_Timur/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:300: PytestDeprecationWarning: The configuration option \"asyncio_default_fixture_loop_scope\" is unset.\nThe event loop scope for asynchronous fixtures will default to the \"fixture\" caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to \"function\" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: \"function\", \"class\", \"module\", \"package\", \"session\"\n\n  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))\nsys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute"
+  },
+  "ruff": {
+    "command": "/Users/Lenovo/Projects/RAG_Timur/.venv/bin/python -m ruff check app bot eval tests",
+    "returncode": 0,
+    "output": "All checks passed!"
+  },
+  "health": {
+    "status": "ok",
+    "version": "3.1.0",
+    "commit": "82e0c8f641a84421ff89d9794b8dec99db06628a",
+    "corpus_version": "2026.11.13",
+    "collection": "gost_chunks_bge_m3",
+    "index_ready": true,
+    "kb_ready": true
+  },
+  "gosts": 37,
+  "kb": {
+    "terms": 400,
+    "nodes": 97,
+    "edges": 116
+  },
+  "gold": {
+    "report_v2_bge_m3.json": {
+      "pass_rate": 0.9459459459459459,
+      "citation_recall": null,
+      "metrics": {
+        "faithfulness": 0.8892,
+        "relevancy": 0.8892,
+        "citation": 0.8633,
+        "refusal": 0.9459
+      },
+      "questions_scored": 37
+    },
+    "report_v3_bge_m3.json": {
+      "pass_rate": 0.98,
+      "citation_recall": 1.0,
+      "metrics": {
+        "faithfulness": 0.96,
+        "relevancy": 0.98,
+        "citation": 0.9512,
+        "refusal": 0.98
+      },
+      "questions_scored": 50
+    },
+    "report_kb.json": {
+      "pass_rate": 0.9,
+      "citation_recall": 1.0,
+      "metrics": {
+        "faithfulness": 0.9,
+        "relevancy": 0.9,
+        "citation": 0.9,
+        "refusal": 0.9
+      },
+      "questions_scored": 10
+    }
+  },
+  "containers": {
+    "command": "docker ps --format {{.Names}}\t{{.Status}}\t{{.Image}}",
+    "returncode": 0,
+    "output": "gostrag-local-postgres-1\tUp 37 minutes (healthy)\tpostgres:16-alpine\ngostrag-local-redis-1\tUp 37 minutes (healthy)\tredis:7-alpine\ngostrag-local-qdrant-1\tUp 37 minutes\tqdrant/qdrant:v1.12.4\ngostrag-qdrant-1\tUp 3 hours\tqdrant/qdrant:v1.12.4"
+  },
+  "memory": {
+    "command": "docker stats --no-stream --format {{.Name}}\t{{.MemUsage}}",
+    "returncode": 0,
+    "output": "gostrag-local-postgres-1\t25.67MiB / 7.748GiB\ngostrag-local-redis-1\t10.12MiB / 7.748GiB\ngostrag-local-qdrant-1\t253.8MiB / 7.748GiB\ngostrag-qdrant-1\t613.8MiB / 7.748GiB"
+  }
+}

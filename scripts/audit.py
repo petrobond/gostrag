@@ -25,8 +25,16 @@ JUDGE_PROMPT = """Ты — независимый аудитор соответ�
 Артефакты системы:
 {artifacts}
 
-Оцени каждое требование. Верни ТОЛЬКО JSON-массив:
-[{{"requirement_id":"REQ-001","status":"compliant|partial|non_compliant|not_applicable","evidence":"краткое доказательство","confidence":0.0}}]
+Оцени каждое требование. Верни ТОЛЬКО JSON-массив, по одному объекту на требование:
+[{{"requirement_id":"REQ-001","status":"compliant|partial|non_compliant","evidence":"...","confidence":0.0}}]
+
+Правила:
+- status только из enum: compliant, partial, non_compliant;
+- evidence должен ссылаться на конкретный артефакт, файл, тест или документ;
+- не ставь compliant без evidence;
+- если evidence неполное или требование выполнено частично — partial;
+- если требование явно не выполнено — non_compliant;
+- не используй not_applicable: неприменимость уже отмечена в требованиях.
 
 Требования:
 {requirements}
@@ -41,10 +49,13 @@ ARTIFACT_FILES = (
     "docs/scope.md",
     "docs/kb.md",
     "docs/eval_results_v3.md",
+    "docs/audit_evidence.md",
+    "docs/networking.md",
+    "docs/dev.md",
 )
 
 
-def load_artifacts(limit: int = 1800) -> str:
+def load_artifacts(limit: int = 2500) -> str:
     blocks = []
     for name in ARTIFACT_FILES:
         path = Path(name)
@@ -87,23 +98,13 @@ async def run_audit(
     artifacts = load_artifacts()
     chain = LLMChain(settings)
     findings: list[Finding] = []
-
-    for start in range(0, len(requirements), batch_size):
-        batch = requirements[start : start + batch_size]
-        req_text = "\n".join(
-            f'{item["id"]} | {item["gost"]}, п. {item["clause"]} | {item["requirement"]}'
-            for item in batch
-        )
-        prompt = JUDGE_PROMPT.format(artifacts=artifacts, requirements=req_text)
-        result = await chain.chat(
-            [{"role": "user", "content": prompt}],
-            complexity="complex",
-            max_tokens=1200,
-            temperature=0.0,
-        )
-        scored = {item.get("requirement_id"): item for item in parse_json_array(result.content)}
-        for item in batch:
-            score = scored.get(item["id"], {})
+    judged = [
+        item
+        for item in requirements
+        if item.get("applicability", "applicable") != "not_applicable"
+    ]
+    for item in requirements:
+        if item.get("applicability", "applicable") == "not_applicable":
             findings.append(
                 Finding(
                     requirement_id=item["id"],
@@ -112,12 +113,53 @@ async def run_audit(
                     requirement=item["requirement"],
                     category=item["category"],
                     severity=item["severity"],
-                    status=str(score.get("status", "partial")),
-                    evidence=str(score.get("evidence", "Автоматическая оценка не дала результата")),
-                    confidence=float(score.get("confidence", 0.0) or 0.0),
+                    status="not_applicable",
+                    evidence=str(
+                        item.get("applicability_reason")
+                        or "Не применимо: требование вне области RAG-системы."
+                    ),
+                    confidence=1.0,
                 )
             )
-        print(f"judged {min(start + batch_size, len(requirements))}/{len(requirements)}", flush=True)
+
+    for start in range(0, len(judged), batch_size):
+        batch = judged[start : start + batch_size]
+        req_text = "\n".join(
+            f'{item["id"]} | {item["gost"]}, п. {item["clause"]} | {item["requirement"]}'
+            for item in batch
+        )
+        prompt = JUDGE_PROMPT.format(artifacts=artifacts, requirements=req_text)
+        result = await chain.chat(
+            [{"role": "user", "content": prompt}],
+            complexity="complex",
+            max_tokens=1500,
+            temperature=0.0,
+        )
+        scored = {item.get("requirement_id"): item for item in parse_json_array(result.content)}
+        for item in batch:
+            score = scored.get(item["id"], {})
+            status = str(score.get("status", "partial"))
+            if status not in {"compliant", "partial", "non_compliant"}:
+                status = "partial"
+            findings.append(
+                Finding(
+                    requirement_id=item["id"],
+                    gost=item["gost"],
+                    clause=str(item["clause"]),
+                    requirement=item["requirement"],
+                    category=item["category"],
+                    severity=item["severity"],
+                    status=status,
+                    evidence=str(score.get("evidence", "Автоматическая оценка не дала результата")),
+                    confidence=min(max(float(score.get("confidence", 0.0) or 0.0), 0.0), 1.0),
+                )
+            )
+        print(
+            f"judged {min(start + batch_size, len(judged))}/{len(judged)} "
+            f"(na={len(requirements) - len(judged)})",
+            flush=True,
+        )
+    findings.sort(key=lambda finding: finding.requirement_id)
 
     meta = {
         "product_version": version,
