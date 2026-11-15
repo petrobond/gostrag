@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import html
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -11,7 +12,7 @@ from types import SimpleNamespace
 import httpx
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import BotCommandScopeChat, Message
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -22,8 +23,10 @@ from app.kb.kb import KnowledgeBase  # noqa: E402
 from app.rag.service import AskService  # noqa: E402
 from app.storage.s3 import S3Store  # noqa: E402
 from app.storage.usage import UsageStore  # noqa: E402
+from bot.commands import ADMIN_COMMANDS, PUBLIC_COMMANDS  # noqa: E402
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 dp = Dispatcher()
 hour_limiter = SlidingWindowLimiter(settings.hourly_questions_per_user, 3600)
 day_limiter = SlidingWindowLimiter(settings.daily_questions_per_user, 86400)
@@ -389,6 +392,18 @@ async def handle_question(message: Message, question: str) -> None:
         await message.answer(part, parse_mode="HTML", disable_web_page_preview=True)
 
 
+async def setup_command_menu(bot: Bot) -> None:
+    """Register public commands globally and extended commands for admins."""
+    await bot.set_my_commands(PUBLIC_COMMANDS)
+    for chat_id in sorted(settings.allowed_user_ids | settings.admin_user_ids):
+        try:
+            await bot.set_my_commands(
+                ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=chat_id)
+            )
+        except Exception as exc:  # noqa: BLE001 - a chat may not have started the bot yet
+            logger.warning("command menu for chat %s not configured: %s", chat_id, exc)
+
+
 async def main() -> None:
     global service, usage
     api_url = settings.ask_api_url.strip()
@@ -407,6 +422,10 @@ async def main() -> None:
     except Exception:  # noqa: BLE001 - bot works without usage DB
         usage = None
     bot = Bot(token=settings.telegram_bot_token)
+    try:
+        await setup_command_menu(bot)
+    except Exception as exc:  # noqa: BLE001 - menu setup must not stop polling
+        logger.warning("command menu not configured: %s", exc)
     await dp.start_polling(bot)
 
 

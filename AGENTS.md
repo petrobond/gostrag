@@ -29,7 +29,7 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
 
 - `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст
 - `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready)
-- версия продукта: **3.2.2** (pyproject = APP_VERSION = `/health`)
+- версия продукта: **3.2.3** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
 - Qdrant — коллекция `gost_chunks_bge_m3_v3` (BGE-M3, 4446 точек, корпус
@@ -163,7 +163,7 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 
 ## 9. Тесты и метрики (v3.2, BGE-M3)
 
-- `pytest`: **89 passed**; ruff clean (app bot eval tests)
+- `pytest`: **91 passed**; ruff clean (app bot eval tests)
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **1.000 (50/50)**,
@@ -219,7 +219,7 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 
 Релизы: `v3.1.0` (TB01, KB10, инфраструктура), `v3.2.0` (аудит + `/audit`),
 `v3.2.1` (KB07 «стандарты корпуса», deploy chown), `v3.2.2` (структура `/kb`,
-outline и corpus `2026.11.13-r2`).
+outline и corpus `2026.11.13-r2`), `v3.2.3` (меню команд Telegram).
 
 ## 12. Чек-лист приёмки этапа 0
 
