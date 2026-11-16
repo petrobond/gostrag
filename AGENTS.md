@@ -37,7 +37,7 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
 - RAG: короткие номера ГОСТов (`ГОСТ Р 71476`) раскрываются по манифесту корпуса;
   список стандартов отвечает детерминированно из `documents.json` (37 стандартов,
   38 документов, 37 мета-цитат)
-- версия продукта: **3.3.1** (pyproject = APP_VERSION = `/health`)
+- версия продукта: **3.3.2** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
 - Qdrant — коллекция `gost_chunks_bge_m3_v3` (BGE-M3, 4446 точек, корпус
@@ -188,6 +188,8 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 - v3.3.1: retrieval v3 **1.000**, v2 **1.000**; judge v3 46/50
   (E03/E04/M04/CL02 — strict/variance outliers, их retrieval/классификация
   не менялись); инвентарь — 37 стандартов/37 мета-цитат
+- v3.3.2: только веб-UX — Enter отправляет вопрос и после HTMX-свопа
+  (делегирование keydown), Shift+Enter — перенос; RAG не менялся
 - gold-KB (10): **1.000 (10/10)**, citation **28/28** (v3.2.1); KB07 —
   «стандарты корпуса» → внутренняя ветка 71476, п. 2
 - audit v3.2: **157 требований / 15 ГОСТов**, N/A 15 (9.55%), coverage **90.45%**,
@@ -250,7 +252,8 @@ outline и corpus `2026.11.13-r2`), `v3.2.3` (меню команд Telegram),
 `v3.2.4` (публичный доступ, админ-команды только владельцу),
 `v3.3.0` (веб-интерфейс и авторизация; план `plans/09-plan-v3.3-web-ui-auth.md`),
 `v3.3.1` (короткие ГОСТы, инвентарь корпуса, Enter в чате; план
-`plans/10-plan-v3.3.1-rag-answers.md`).
+`plans/10-plan-v3.3.1-rag-answers.md`),
+`v3.3.2` (Enter после HTMX-свопа через делегирование событий).
 
 ## 12. Чек-лист приёмки этапа 0
 

@@ -4,7 +4,7 @@ COMPOSE := docker compose -f deploy/docker-compose.local.yml
 PY := .venv/bin/python
 ROOT := $(CURDIR)
 
-export APP_VERSION := 3.3.1
+export APP_VERSION := 3.3.2
 export CORPUS_VERSION := 2026.11.13-r2
 export QDRANT_URL := http://localhost:6335
 export QDRANT_COLLECTION := gost_chunks_bge_m3
