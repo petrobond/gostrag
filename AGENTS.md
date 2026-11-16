@@ -27,7 +27,9 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
 
 ## 4. Архитектура
 
-- `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст
+- `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст;
+  `/kb`, `/term`, `/links`; публичный доступ для всех, `/stats`, `/audit`,
+  `/audit_status` — только владелец (TELEGRAM_ADMIN_IDS)
 - `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready)
 - версия продукта: **3.2.4** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
