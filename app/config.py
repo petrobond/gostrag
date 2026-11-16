@@ -109,11 +109,14 @@ class Settings(BaseSettings):
     hourly_questions_per_user: int = Field(default=10, alias="HOURLY_QUESTIONS_PER_USER")
     daily_tokens_global: int = Field(default=2_000_000, alias="DAILY_TOKENS_GLOBAL")
     max_top_k: int = Field(default=10, alias="MAX_TOP_K")
+    adaptive_retrieval_enabled: bool = Field(
+        default=True, alias="ADAPTIVE_RETRIEVAL_ENABLED"
+    )
     request_timeout_sec: int = Field(default=90, alias="REQUEST_TIMEOUT_SEC")
     queue_max_depth: int = Field(default=5, alias="QUEUE_MAX_DEPTH")
 
     # App
-    app_version: str = Field(default="3.3.2", alias="APP_VERSION")
+    app_version: str = Field(default="3.3.3", alias="APP_VERSION")
     ask_api_url: str = Field(default="", alias="ASK_API_URL")
     corpus_version: str = Field(default="2026.11.13-r2", alias="CORPUS_VERSION")
     data_source_dir: str = Field(default="/data/source", alias="DATA_SOURCE_DIR")

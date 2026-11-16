@@ -29,6 +29,7 @@
 - `plans/04-decisions.md` — ADR.
 - `plans/09-plan-v3.3-web-ui-auth.md` — план веб-интерфейса v3.3.0.
 - `plans/10-plan-v3.3.1-rag-answers.md` — короткие ГОСТы и инвентарь v3.3.1.
+- `plans/11-plan-v3.3.3-adaptive-retrieval.md` — adaptive retrieval и термины v3.3.3.
 
 ## Ограничения
 

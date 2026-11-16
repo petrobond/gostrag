@@ -36,8 +36,9 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
   таблицы `web_*` в PostgreSQL, миграции в `app/web/migrations.py`
 - RAG: короткие номера ГОСТов (`ГОСТ Р 71476`) раскрываются по манифесту корпуса;
   список стандартов отвечает детерминированно из `documents.json` (37 стандартов,
-  38 документов, 37 мета-цитат)
-- версия продукта: **3.3.2** (pyproject = APP_VERSION = `/health`)
+  38 документов, 37 мета-цитат); term catalog 71476 — 105 терминов, adaptive
+  planner + LLM-listwise selector поднаборов
+- версия продукта: **3.3.3** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
 - Qdrant — коллекция `gost_chunks_bge_m3_v3` (BGE-M3, 4446 точек, корпус
@@ -101,7 +102,7 @@ VPS (ultraVDS):
 Локально:
 
 ```bash
-.venv/bin/python -m pytest -q tests          # 150 тестов
+.venv/bin/python -m pytest -q tests          # 167 тестов
 .venv/bin/python -m ruff check app bot eval tests
 .venv/bin/python scripts/net_matrix.py        # сеть: Telegram, VPS, Cloud.ru, GigaChat
 .venv/bin/python scripts/ask.py "вопрос"
@@ -178,7 +179,7 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 
 ## 9. Тесты и метрики (v3.2, BGE-M3)
 
-- `pytest`: **150 passed, 5 skipped**; ruff clean (app bot eval tests)
+- `pytest`: **167 passed, 5 skipped**; ruff clean (app bot eval tests)
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **1.000 (50/50)**,
@@ -190,6 +191,9 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
   не менялись); инвентарь — 37 стандартов/37 мета-цитат
 - v3.3.2: только веб-UX — Enter отправляет вопрос и после HTMX-свопа
   (делегирование keydown), Shift+Enter — перенос; RAG не менялся
+- v3.3.3: морфология ГОСТов; term catalog 71476 — 105 терминов/7 подразделов;
+  adaptive planner + LLM-listwise selector поднаборов; retrieval v3/v2 1.000;
+  judge v3 47/50 (E04/M04/CL02 — strict/variance outliers)
 - gold-KB (10): **1.000 (10/10)**, citation **28/28** (v3.2.1); KB07 —
   «стандарты корпуса» → внутренняя ветка 71476, п. 2
 - audit v3.2: **157 требований / 15 ГОСТов**, N/A 15 (9.55%), coverage **90.45%**,
@@ -253,7 +257,9 @@ outline и corpus `2026.11.13-r2`), `v3.2.3` (меню команд Telegram),
 `v3.3.0` (веб-интерфейс и авторизация; план `plans/09-plan-v3.3-web-ui-auth.md`),
 `v3.3.1` (короткие ГОСТы, инвентарь корпуса, Enter в чате; план
 `plans/10-plan-v3.3.1-rag-answers.md`),
-`v3.3.2` (Enter после HTMX-свопа через делегирование событий).
+`v3.3.2` (Enter после HTMX-свопа через делегирование событий),
+`v3.3.3` (морфология ГОСТов, term catalog 71476, adaptive planner
+и LLM-поднаборы; план `plans/11-plan-v3.3.3-adaptive-retrieval.md`).
 
 ## 12. Чек-лист приёмки этапа 0
 
