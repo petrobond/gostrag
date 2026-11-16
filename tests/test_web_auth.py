@@ -206,6 +206,8 @@ def test_composer_enter_submits_without_newline():
     )
     script = (root / "static" / "app.js").read_text(encoding="utf-8")
     assert "data-enter-submit" in template
+    assert 'document.addEventListener("keydown"' in script
+    assert 'closest?.("textarea[data-enter-submit]")' in script
     assert "requestSubmit" in script
     assert "shiftKey" in script
     assert "isComposing" in script
