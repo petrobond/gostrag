@@ -90,6 +90,21 @@ class Settings(BaseSettings):
     qdrant_url: str = Field(default="http://qdrant:6333", alias="QDRANT_URL")
     qdrant_collection: str = Field(default="gost_chunks", alias="QDRANT_COLLECTION")
 
+    # Web UI (cookie sessions, invite-only)
+    web_enabled: bool = Field(default=True, alias="WEB_ENABLED")
+    web_domain: str = Field(default="", alias="WEB_DOMAIN")
+    web_acme_email: str = Field(default="", alias="WEB_ACME_EMAIL")
+    web_cookie_secure: bool = Field(default=True, alias="WEB_COOKIE_SECURE")
+    web_session_ttl_days: int = Field(default=7, alias="WEB_SESSION_TTL_DAYS")
+    web_session_idle_hours: int = Field(default=24, alias="WEB_SESSION_IDLE_HOURS")
+    web_automigrate: bool = Field(default=True, alias="WEB_AUTOMIGRATE")
+    web_max_concurrent_asks: int = Field(default=4, alias="WEB_MAX_CONCURRENT_ASKS")
+    web_login_ip_limit: int = Field(default=10, alias="WEB_LOGIN_IP_LIMIT")
+    web_login_email_limit: int = Field(default=5, alias="WEB_LOGIN_EMAIL_LIMIT")
+    web_login_window_min: int = Field(default=15, alias="WEB_LOGIN_WINDOW_MIN")
+    web_invite_ttl_days: int = Field(default=7, alias="WEB_INVITE_TTL_DAYS")
+    web_password_min_len: int = Field(default=12, alias="WEB_PASSWORD_MIN_LEN")
+
     # Limits
     daily_questions_per_user: int = Field(default=50, alias="DAILY_QUESTIONS_PER_USER")
     hourly_questions_per_user: int = Field(default=10, alias="HOURLY_QUESTIONS_PER_USER")

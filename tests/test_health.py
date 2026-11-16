@@ -10,3 +10,4 @@ def test_health_contains_version_and_runtime_fields():
     assert "collection" in data
     assert "kb_ready" in data
     assert isinstance(data["index_ready"], bool)
+    assert isinstance(data["web_ready"], bool)

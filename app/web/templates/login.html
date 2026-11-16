@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Вход — gostrag{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block main_class %}auth-main{% endblock %}
+{% block content %}
+<section class="auth-card">
+  <h1>gostrag</h1>
+  <p class="muted">Вопросы по российским стандартам ИИ с цитатами: ГОСТ, пункт, страница.</p>
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/login" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label for="email">Email</label>
+    <input id="email" type="email" name="email" value="{{ email }}" autocomplete="username"
+           inputmode="email" required autofocus>
+    <label for="password">Пароль</label>
+    <input id="password" type="password" name="password" autocomplete="current-password" required>
+    <button type="submit" class="primary">Войти</button>
+  </form>
+  <p class="muted small">Доступ только по приглашению администратора. Регистрация закрыта.</p>
+</section>
+{% endblock %}

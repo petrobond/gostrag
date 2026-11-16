@@ -5,12 +5,13 @@ import asyncio
 import hashlib
 import json
 import shutil
+import sys
 import tarfile
 import time
 import uuid
 from collections import Counter
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import boto3
@@ -258,6 +259,162 @@ def cmd_data_fetch(args: argparse.Namespace) -> None:
     )
 
 
+def _read_password() -> str:
+    import getpass
+
+    if sys.stdin.isatty():
+        first = getpass.getpass("Пароль: ")
+        second = getpass.getpass("Повторите пароль: ")
+        if first != second:
+            raise SystemExit("passwords do not match")
+        return first
+    return sys.stdin.readline().rstrip("\n")
+
+
+def _web_base(settings) -> str:
+    if settings.web_domain:
+        return f"https://{settings.web_domain}"
+    return "http://127.0.0.1:8000"
+
+
+async def _web_pool(settings):
+    import asyncpg
+
+    return await asyncpg.create_pool(settings.postgres_dsn, min_size=1, max_size=2, timeout=10)
+
+
+async def cmd_db_migrate(args: argparse.Namespace) -> None:
+    del args
+    from app.web.migrations import apply_migrations
+
+    settings = get_settings()
+    pool = await _web_pool(settings)
+    try:
+        applied = await apply_migrations(pool)
+    finally:
+        await pool.close()
+    print(json.dumps({"applied": applied}, ensure_ascii=False))
+
+
+async def cmd_web_user(args: argparse.Namespace) -> None:
+    from app.web.migrations import apply_migrations
+    from app.web.security import (
+        hash_password,
+        is_valid_email,
+        new_token,
+        normalize_email,
+        password_problem,
+        token_hash,
+    )
+    from app.web.store import WebStore
+
+    settings = get_settings()
+    pool = await _web_pool(settings)
+    try:
+        await apply_migrations(pool)
+        store = WebStore(pool)
+        action = args.web_command
+
+        if action == "list":
+            users = await store.list_users()
+            payload = [
+                {
+                    "id": str(user["id"]),
+                    "email": user["email"],
+                    "role": user["role"],
+                    "is_active": user["is_active"],
+                    "created_at": user["created_at"].isoformat(),
+                    "last_login": user["last_login"].isoformat() if user["last_login"] else None,
+                }
+                for user in users
+            ]
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return
+
+        email = normalize_email(args.email)
+        if not is_valid_email(email):
+            raise SystemExit("invalid email")
+        user = await store.get_user_by_email(email)
+
+        if action == "create":
+            if user is not None:
+                raise SystemExit("user already exists")
+            if args.password_stdin:
+                password = _read_password()
+                problem = password_problem(password, settings.web_password_min_len)
+                if problem:
+                    raise SystemExit(problem)
+                created = await store.create_user(
+                    email,
+                    role=args.role,
+                    password_hash=hash_password(password),
+                    is_active=True,
+                )
+                print(
+                    json.dumps(
+                        {"created": str(created["id"]), "email": email, "role": args.role},
+                        ensure_ascii=False,
+                    )
+                )
+                return
+            token = new_token()
+            invite = await store.create_invite(
+                email,
+                args.role,
+                "invite",
+                token_hash(token),
+                None,
+                datetime.now(UTC) + timedelta(days=settings.web_invite_ttl_days),
+            )
+            print(
+                json.dumps(
+                    {
+                        "invite": f"{_web_base(settings)}/invite/{token}",
+                        "email": email,
+                        "role": args.role,
+                        "expires_at": invite["expires_at"].isoformat(),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return
+
+        if action in {"passwd", "invite"}:
+            if user is None:
+                raise SystemExit("user not found")
+            if action == "passwd":
+                password = _read_password()
+                problem = password_problem(password, settings.web_password_min_len)
+                if problem:
+                    raise SystemExit(problem)
+                await store.set_password(user["id"], hash_password(password))
+                await store.revoke_user_sessions(user["id"])
+                print(json.dumps({"password_updated": email}, ensure_ascii=False))
+                return
+            token = new_token()
+            invite = await store.create_invite(
+                email,
+                user["role"],
+                "reset",
+                token_hash(token),
+                None,
+                datetime.now(UTC) + timedelta(days=settings.web_invite_ttl_days),
+            )
+            print(
+                json.dumps(
+                    {
+                        "reset": f"{_web_base(settings)}/invite/{token}",
+                        "email": email,
+                        "expires_at": invite["expires_at"].isoformat(),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return
+    finally:
+        await pool.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="gostrag")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -283,6 +440,35 @@ def main() -> None:
     fetch.add_argument("--prefix", default="data")
     fetch.add_argument("--dest", default="/data")
     fetch.set_defaults(func=cmd_data_fetch)
+
+    db = sub.add_parser("db", help="database maintenance")
+    db_sub = db.add_subparsers(dest="db_command", required=True)
+    db_migrate = db_sub.add_parser("migrate", help="apply web ui migrations")
+    db_migrate.set_defaults(func=lambda args: asyncio.run(cmd_db_migrate(args)))
+
+    web_user = sub.add_parser("web-user", help="manage web ui users")
+    web_sub = web_user.add_subparsers(dest="web_command", required=True)
+
+    web_create = web_sub.add_parser("create", help="create a user or an invite link")
+    web_create.add_argument("--email", required=True)
+    web_create.add_argument("--role", choices=["user", "admin"], default="user")
+    web_create.add_argument(
+        "--password-stdin",
+        action="store_true",
+        help="read the password from stdin/tty instead of printing an invite link",
+    )
+    web_create.set_defaults(func=lambda args: asyncio.run(cmd_web_user(args)))
+
+    web_list = web_sub.add_parser("list", help="list web users")
+    web_list.set_defaults(func=lambda args: asyncio.run(cmd_web_user(args)))
+
+    web_passwd = web_sub.add_parser("passwd", help="set a password and revoke sessions")
+    web_passwd.add_argument("--email", required=True)
+    web_passwd.set_defaults(func=lambda args: asyncio.run(cmd_web_user(args)))
+
+    web_invite = web_sub.add_parser("invite", help="issue a one-time password reset link")
+    web_invite.add_argument("--email", required=True)
+    web_invite.set_defaults(func=lambda args: asyncio.run(cmd_web_user(args)))
 
     args = parser.parse_args()
     args.func(args)
