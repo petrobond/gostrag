@@ -42,6 +42,25 @@ services:
     logging: *default-logging
     restart: unless-stopped
 
+  proxy:
+    image: caddy:2-alpine
+    profiles: ["proxy"]
+    env_file:
+      - .env
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    logging: *default-logging
+    restart: unless-stopped
+
   bot:
     image: ${APP_IMAGE:-gostrag:latest}
     command: ["python", "-m", "bot.main"]
@@ -140,4 +159,6 @@ volumes:
   postgres_data:
   redis_data:
   fastembed_cache:
+  caddy_data:
+  caddy_config:
 

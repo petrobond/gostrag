@@ -1,0 +1,30 @@
+{
+	email {$WEB_ACME_EMAIL}
+	admin off
+}
+
+{$WEB_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		-Server
+	}
+
+	@internal path /api/ask /health
+	respond @internal 404
+
+	@static path /static/*
+	header @static Cache-Control "public, max-age=86400"
+
+	@invites path /invite/*
+	skip_log @invites
+	skip_log @static
+
+	reverse_proxy app:8000
+}

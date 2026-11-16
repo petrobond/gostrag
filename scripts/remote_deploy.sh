@@ -15,6 +15,11 @@ PREV_IMAGE="$(grep -E '^APP_IMAGE=' deploy/.env | cut -d= -f2- || true)"
 PREV_IMAGE="${PREV_IMAGE:-gostrag:latest}"
 PREV_COLLECTION="$(grep -E '^QDRANT_COLLECTION=' deploy/.env | cut -d= -f2- || true)"
 PREV_COLLECTION="${PREV_COLLECTION:-gost_chunks_bge_m3}"
+WEB_DOMAIN="$(grep -E '^WEB_DOMAIN=' deploy/.env | cut -d= -f2- || true)"
+PROFILES=()
+if [ -n "$WEB_DOMAIN" ]; then
+  PROFILES=(--profile proxy)
+fi
 echo "$PREV_IMAGE" | sudo -n tee deploy/.previous_image >/dev/null
 
 sudo -n cp -p deploy/.env "backups/deploy.env.$STAMP"
@@ -43,13 +48,16 @@ if [ -n "${CORPUS_VERSION:-}" ]; then
     || echo "CORPUS_VERSION=$CORPUS_VERSION" | sudo -n tee -a deploy/.env >/dev/null
 fi
 
-"${COMPOSE[@]}" pull app bot data
+"${COMPOSE[@]}" "${PROFILES[@]}" pull app bot data
+if [ -n "$WEB_DOMAIN" ]; then
+  "${COMPOSE[@]}" pull proxy
+fi
 if [ -n "${DATA_VERSION:-}" ]; then
   "${COMPOSE[@]}" --profile data run --rm -T data \
     python -m app.cli data-fetch --version "$DATA_VERSION" --dest /data
   "${COMPOSE[@]}" --profile data run --rm -T data
 fi
-"${COMPOSE[@]}" up -d --remove-orphans
+"${COMPOSE[@]}" "${PROFILES[@]}" up -d --remove-orphans
 
 ok=0
 for _ in $(seq 1 45); do
@@ -73,6 +81,24 @@ curl -fsS -X POST http://localhost:8000/api/ask \
   -H 'Content-Type: application/json' \
   -d '{"question":"Что такое искусственный интеллект?","top_k":2}' \
   | grep -q '"answer"'
+
+if [ -n "$WEB_DOMAIN" ]; then
+  web_code=""
+  for _ in $(seq 1 30); do
+    web_code="$(curl -s -o /dev/null -w '%{http_code}' "https://$WEB_DOMAIN/login" || true)"
+    [ "$web_code" = "200" ] && break
+    sleep 2
+  done
+  if [ "$web_code" = "200" ]; then
+    echo "web ok: https://$WEB_DOMAIN/login"
+  else
+    echo "warning: web login is not reachable (dns/certificate may be pending)"
+  fi
+  ask_code="$(curl -s -o /dev/null -w '%{http_code}' "https://$WEB_DOMAIN/api/ask" || true)"
+  if [ "$ask_code" != "404" ]; then
+    echo "warning: /api/ask is reachable from the internet ($ask_code)"
+  fi
+fi
 
 sudo -n docker image prune -f >/dev/null 2>&1 || true
 echo "deploy ok: $TAG ($APP_VERSION)"

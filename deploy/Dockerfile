@@ -29,7 +29,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     EMBEDDING_CACHE_DIR=/app/.cache/fastembed
 
-ARG APP_VERSION=3.2.4
+ARG APP_VERSION=3.3.0
 ARG GIT_COMMIT=""
 ARG GIT_TAG=""
 ENV APP_VERSION=${APP_VERSION} \
@@ -63,5 +63,5 @@ RUN mkdir -p /app/reports /data/source /data/corpus /data/index /data/kb /app/.c
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
 
