@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Пользователи — gostrag{% endblock %}
+{% block content %}
+{% include "admin/nav.html" %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if invite_url %}
+<div class="alert alert-ok">
+  Одноразовая ссылка-приглашение (передайте пользователю):
+  <code class="invite-link">{{ invite_url }}</code>
+</div>
+{% endif %}
+{% if reset_url %}
+<div class="alert alert-ok">
+  Одноразовая ссылка для сброса пароля (передайте пользователю):
+  <code class="invite-link">{{ reset_url }}</code>
+</div>
+{% endif %}
+
+<section class="card">
+  <h2>Создать приглашение</h2>
+  <form method="post" action="/admin/users/invite" class="row-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="email" name="email" placeholder="user@example.ru" required>
+    <button type="submit" class="primary">Создать</button>
+  </form>
+  <p class="muted small">Новый пользователь получает роль «пользователь». Роль admin назначается только через CLI.</p>
+</section>
+
+<section class="card">
+  <h2>Пользователи</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Email</th><th>Роль</th><th>Статус</th><th>Создан</th><th>Вход</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in users %}
+        <tr>
+          <td>{{ item.email }}</td>
+          <td>{{ item.role }}</td>
+          <td>{{ 'активен' if item.is_active else 'заблокирован' }}</td>
+          <td>{{ item.created_at|dt }}</td>
+          <td>{{ item.last_login|dt }}</td>
+          <td class="row-actions">
+            <form method="post" action="/admin/users/{{ item.id }}/reset" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit" class="secondary small-button">Сброс пароля</button>
+            </form>
+            {% if item.is_active %}
+            <form method="post" action="/admin/users/{{ item.id }}/block" class="inline"
+                  onsubmit="return confirm('Заблокировать пользователя?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit" class="danger small-button">Блок</button>
+            </form>
+            {% else %}
+            <form method="post" action="/admin/users/{{ item.id }}/unblock" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit" class="secondary small-button">Разблокировать</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">Пользователей пока нет.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

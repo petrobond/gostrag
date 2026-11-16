@@ -244,3 +244,26 @@ button:disabled { cursor: wait; opacity: 0.65; }
   .who .email { max-width: 120px; }
   .composer-actions { align-items: flex-start; flex-direction: column; }
 }
+
+/* admin */
+.admin-head { align-items: center; display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
+.admin-nav { display: flex; flex-wrap: wrap; gap: 0.9rem; }
+.admin-nav a { color: var(--muted); }
+.admin-nav a:hover { color: var(--accent); }
+.stats-grid { display: grid; gap: 0.8rem; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 1rem; }
+.stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; }
+.stat-value { font-size: 1.6rem; font-weight: 700; }
+.stat-label { color: var(--muted); font-size: 0.8rem; }
+.facts { display: grid; gap: 0.4rem 1rem; grid-template-columns: max-content 1fr; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.table-wrap { overflow-x: auto; }
+.table { border-collapse: collapse; font-size: 0.9rem; width: 100%; }
+.table th, .table td { border-bottom: 1px solid var(--border); padding: 0.5rem 0.6rem; text-align: left; vertical-align: middle; }
+.table th { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.small-button { font-size: 0.8rem; padding: 0.3rem 0.6rem; }
+.row-form { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.row-form input[type="email"] { flex: 1; min-width: 220px; }
+.invite-link { display: inline-block; margin-top: 0.3rem; overflow-wrap: anywhere; }
+.audit-text { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; font-size: 0.82rem; max-height: 70vh; overflow: auto; padding: 0.8rem; white-space: pre-wrap; }

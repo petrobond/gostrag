@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — gostrag{% endblock %}
+{% block content %}
+{% include "admin/nav.html" %}
+<section class="card">
+  <h2>{{ title }}</h2>
+  <p><a href="/admin/audit">← К списку отчётов</a></p>
+  <pre class="audit-text">{{ content }}</pre>
+</section>
+{% endblock %}

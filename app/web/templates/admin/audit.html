@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Аудит — gostrag{% endblock %}
+{% block content %}
+{% include "admin/nav.html" %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<section class="card">
+  <h2>Отчёты аудита</h2>
+  <p class="muted small">Только просмотр: отчёты создаются локально командой <code>scripts/audit.py</code>.</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Источник</th><th>Файл</th><th>Размер</th><th>Изменён</th></tr></thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item.root }}</td>
+          <td>
+            <a href="/admin/audit/view?root={{ item.root }}&path={{ item.path|urlencode }}">{{ item.path }}</a>
+          </td>
+          <td>{{ item.size }} Б</td>
+          <td>{{ item.mtime|dt }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">Отчётов пока нет.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

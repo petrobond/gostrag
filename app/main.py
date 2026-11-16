@@ -104,6 +104,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.include_router(ask_router, prefix="/api")
 
     if cfg.web_enabled:
+        from app.web.routes_admin import router as web_admin_router
         from app.web.routes_api import router as web_api_router
         from app.web.routes_chat import router as web_chat_router
         from app.web.routes_pages import router as web_pages_router
@@ -111,6 +112,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
 
         app.include_router(web_pages_router)
         app.include_router(web_chat_router)
+        app.include_router(web_admin_router)
         app.include_router(web_api_router, prefix="/api/web")
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

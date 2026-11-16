@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Документы — gostrag{% endblock %}
+{% block content %}
+{% include "admin/nav.html" %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<section class="card">
+  <h2>Документы корпуса</h2>
+  <p class="muted small">Источник: <code>{{ corpus_path }}</code>. Ингест выполняется только локально, веб-интерфейс работает в режиме чтения.</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>ГОСТ</th><th>Название</th><th>Стр.</th><th>Чанков</th><th>PDF</th></tr>
+      </thead>
+      <tbody>
+        {% for doc in documents %}
+        <tr>
+          <td>{{ doc.gost_number or doc.doc_id }}</td>
+          <td>{{ doc.title }}</td>
+          <td>{{ doc.pages }}</td>
+          <td>{{ doc.chunks }}</td>
+          <td>
+            {% if doc.pdf_url %}
+            <a href="{{ doc.pdf_url }}" target="_blank" rel="noopener noreferrer">Открыть PDF</a>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Документы не найдены.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

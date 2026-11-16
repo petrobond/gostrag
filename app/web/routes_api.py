@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from app.web.auth import require_user_api, verify_csrf
+from app.web.auth import require_admin_api, require_user_api, verify_csrf
 from app.web.chat import (
     DEFAULT_TITLE,
     ConversationNotFound,
@@ -98,3 +98,20 @@ async def ask(request: Request) -> dict:
         raise HTTPException(status_code=404, detail="conversation not found") from exc
     except ServiceUnavailable as exc:
         raise HTTPException(status_code=502, detail="answer is unavailable") from exc
+
+
+@router.get("/admin/stats")
+async def admin_stats(request: Request) -> dict:
+    await require_admin_api(request)
+    store = _store(request)
+    stats = await store.web_stats(days=30)
+    settings = request.app.state.settings
+    stats.update(
+        {
+            "corpus_version": settings.corpus_version,
+            "collection": settings.qdrant_collection,
+            "index_ready": request.app.state.service is not None,
+            "web_ready": bool(getattr(request.app.state, "web_ready", False)),
+        }
+    )
+    return stats

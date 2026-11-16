@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Админ — gostrag{% endblock %}
+{% block content %}
+{% include "admin/nav.html" %}
+<section class="stats-grid">
+  <div class="stat"><div class="stat-value">{{ stats.get('questions', 0) }}</div><div class="stat-label">вопросов за 30 дней</div></div>
+  <div class="stat"><div class="stat-value">{{ stats.get('refusals', 0) }}</div><div class="stat-label">отказов</div></div>
+  <div class="stat"><div class="stat-value">{{ stats.get('active_users', 0) }}</div><div class="stat-label">активных пользователей</div></div>
+  <div class="stat"><div class="stat-value">{{ stats.get('p50', 0) }} / {{ stats.get('p95', 0) }}</div><div class="stat-label">p50 / p95, мс</div></div>
+  <div class="stat"><div class="stat-value">{{ stats.get('conversations', 0) }}</div><div class="stat-label">диалогов</div></div>
+  <div class="stat"><div class="stat-value">{{ stats.get('users_total', 0) }}</div><div class="stat-label">пользователей всего</div></div>
+</section>
+<section class="card">
+  <h2>Состояние</h2>
+  <dl class="facts">
+    <dt>Версия корпуса</dt><dd>{{ corpus_version }}</dd>
+    <dt>Коллекция Qdrant</dt><dd>{{ collection }}</dd>
+    <dt>Индекс</dt><dd>{{ 'готов' if index_ready else 'не загружен' }}</dd>
+    <dt>Веб-интерфейс</dt><dd>{{ 'готов' if web_ready else 'недоступен' }}</dd>
+  </dl>
+  <p class="muted small">Статистика Telegram-бота доступна командой /stats в боте.</p>
+</section>
+{% endblock %}
