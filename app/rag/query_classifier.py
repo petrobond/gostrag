@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 
-GOST_RE = re.compile(r"(ГОСТ\s*Р|ПНСТ)\s*(\d+(?:\.\d+)?)\s*[—–-]\s*(\d{4})", re.IGNORECASE)
+from app.rag.gost_refs import GOST_FULL_RE, canonical_prefix
+
+GOST_RE = GOST_FULL_RE
 CLAUSE_RE = re.compile(r"(?:п\.?|пункт)\s*(\d+(?:\.\d+)+)", re.IGNORECASE)
 TABLE_REF_RE = re.compile(
     r"таблиц[аыуе]\s+([А-ЯA-Z]?\.?\s?\d+(?:\.\d+)?)", re.IGNORECASE
@@ -104,7 +106,8 @@ def classify_question(question: str) -> str:
 def extract_gosts(question: str) -> list[str]:
     result: list[str] = []
     for match in GOST_RE.finditer(question):
-        value = f"{match.group(1).upper()} {match.group(2)}—{match.group(3)}"
+        prefix = canonical_prefix(match.group("prefix"))
+        value = f"{prefix} {match.group('number')}—{match.group('year')}"
         if value not in result:
             result.append(value)
     return result

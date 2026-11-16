@@ -5,17 +5,25 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
+# Russian text often inflects the designation: «в ГОСТе Р 71476», «по ГОСТу Р …».
+GOST_PREFIX = r"(?:ГОСТ(?:а|у|е|ом|ами|ах)?(?:\s*Р)?|ПНСТ(?:а|у|е|ом|ами|ах)?)"
+
 GOST_FULL_RE = re.compile(
-    r"(ГОСТ\s*Р|ПНСТ)\s*(\d+(?:\.\d+)?)\s*[—–-]\s*(\d{4})",
+    rf"(?P<prefix>{GOST_PREFIX})\s*(?P<number>\d+(?:\.\d+){{0,3}})"
+    r"\s*[—–-]\s*(?P<year>\d{4})",
     re.IGNORECASE,
 )
 
 # Year is optional: users often write "ГОСТ Р 71476" instead of "ГОСТ Р 71476—2024".
 GOST_REF_RE = re.compile(
-    r"(?P<prefix>ГОСТ(?:\s*Р)?|ПНСТ)\s*(?P<number>\d+(?:\.\d+){0,3})"
+    rf"(?P<prefix>{GOST_PREFIX})\s*(?P<number>\d+(?:\.\d+){{0,3}})"
     r"(?:\s*[—–-]?\s*(?P<year>\d{4}))?",
     re.IGNORECASE,
 )
+
+
+def canonical_prefix(prefix: str) -> str:
+    return "ПНСТ" if prefix.upper().startswith("ПНСТ") else "ГОСТ Р"
 
 
 def _key(value: str) -> str:
@@ -64,7 +72,7 @@ def resolve_gost_references(question: str, aliases: dict[str, str]) -> str:
         return question
 
     def replace(match: re.Match[str]) -> str:
-        prefix = "ПНСТ" if match.group("prefix").upper().startswith("ПНСТ") else "ГОСТ Р"
+        prefix = canonical_prefix(match.group("prefix"))
         number = match.group("number")
         year = match.group("year")
         key = _key(f"{prefix} {number}" + (f"—{year}" if year else ""))

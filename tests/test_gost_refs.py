@@ -38,6 +38,28 @@ def test_full_and_unknown_are_preserved():
     assert resolve_gost_references("ГОСТ Р 99999", ALIASES) == "ГОСТ Р 99999"
 
 
+def test_inflected_gost_forms_are_expanded():
+    for question in (
+        "в ГОСТе Р 71476",
+        "по ГОСТу Р 71476",
+        "из ГОСТа Р 71476",
+        "ГОСТом Р 71476",
+        "в ГОСТе Р 71476—2024",
+        "по ГОСТу Р 71476-2024",
+    ):
+        resolved = resolve_gost_references(question, ALIASES)
+        assert "ГОСТ Р 71476—2024" in resolved, question
+
+
+def test_inflected_full_designation_is_extracted():
+    assert extract_gosts("в ГОСТе Р 71476—2024") == ["ГОСТ Р 71476—2024"]
+    assert extract_gosts("по ГОСТу 71476—2024") == ["ГОСТ Р 71476—2024"]
+
+
+def test_inflected_unknown_is_preserved():
+    assert resolve_gost_references("в ГОСТе Р 99999", ALIASES) == "в ГОСТе Р 99999"
+
+
 def test_ambiguous_base_is_preserved():
     aliases = build_gost_alias_map(["ГОСТ Р 1—2023", "ГОСТ Р 1—2024"])
     assert resolve_gost_references("по ГОСТ Р 1", aliases) == "по ГОСТ Р 1"

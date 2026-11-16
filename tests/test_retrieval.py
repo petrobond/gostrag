@@ -95,6 +95,13 @@ def test_resolve_short_gost_reference(tmp_path):
     assert retriever.resolve_query("ГОСТ Р 999") == "ГОСТ Р 999"
 
 
+def test_resolve_inflected_gost_reference(tmp_path):
+    retriever = make_retriever(tmp_path)
+    resolved = retriever.resolve_query("Что говорится в п. 4.2 ГОСТе Р 1?")
+    assert "ГОСТ Р 1—2024" in resolved
+    assert retriever._extract_reference(resolved, None)[0] == "ГОСТ Р 1—2024"
+
+
 def test_enumeration_anchor_prefers_dense_then_adds_second(tmp_path):
     retriever = make_retriever(tmp_path)
     bm25_hits = [

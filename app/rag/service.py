@@ -10,6 +10,7 @@ from app.config import Settings
 from app.embeddings.factory import get_embedder
 from app.kb.kb import KnowledgeBase
 from app.llm.chain import LLMChain
+from app.rag.adaptive import AdaptivePlan, plan_question
 from app.rag.chunk_store import ChunkStore
 from app.rag.corpus_catalog import (
     build_corpus_standards,
@@ -24,6 +25,8 @@ from app.rag.query_classifier import (
     extract_table_ref,
 )
 from app.rag.retriever import RetrievedChunk, Retriever
+from app.rag.term_catalog import TermCatalog
+from app.rag.term_selector import TermSelector
 from app.retrieval.bm25 import BM25Index
 from app.storage.qdrant import QdrantStore
 
@@ -70,7 +73,10 @@ class AskService:
         self.retriever = Retriever(
             settings, self.embedder, self.bm25, self.qdrant, self.chunks, kb=self.kb
         )
-        self.generator = Generator(LLMChain(settings))
+        self.llm = LLMChain(settings)
+        self.generator = Generator(self.llm)
+        self.term_catalog = TermCatalog(self.chunks.by_id.values())
+        self.term_selector = TermSelector(self.embedder, self.llm)
 
     async def ask(self, question: str, top_k: int | None = None) -> AskResult:
         started = time.perf_counter()
@@ -101,6 +107,16 @@ class AskService:
                 answer, answer_chunks = extracted
                 latency_ms = int((time.perf_counter() - started) * 1000)
                 return AskResult(answer=answer, chunks=answer_chunks, latency_ms=latency_ms)
+        plan = (
+            plan_question(resolved_question, gosts)
+            if getattr(self.settings, "adaptive_retrieval_enabled", True)
+            else None
+        )
+        if plan is not None:
+            adaptive_answer = await self._answer_adaptive_plan(plan)
+            if adaptive_answer is not None:
+                latency_ms = int((time.perf_counter() - started) * 1000)
+                return AskResult(answer=adaptive_answer, chunks=[], latency_ms=latency_ms)
         if question_type == "comparison":
             chunks = await self.retriever.retrieve_comparison(
                 resolved_question, gosts, top_k=4
@@ -175,6 +191,76 @@ class AskService:
             model="deterministic:corpus_list",
             provider="rules",
         )
+
+    async def _answer_adaptive_plan(self, plan: AdaptivePlan) -> Answer | None:
+        if not self.term_catalog.has_gost(plan.gost_number):
+            return None
+        if plan.kind == "term_inventory":
+            text = self.term_catalog.format_inventory(plan.gost_number)
+            if not text:
+                return None
+            return Answer(
+                answer=text,
+                citations=self.term_catalog.section_citations(plan.gost_number),
+                confidence=1.0,
+                model="deterministic:term_inventory",
+                provider="rules",
+            )
+        if plan.kind == "term_subset":
+            return await self._term_subset_answer(plan)
+        return None
+
+    async def _term_subset_answer(self, plan: AdaptivePlan) -> Answer | None:
+        terms = self.term_catalog.for_gost(plan.gost_number)
+        if not terms:
+            return None
+        selection = await self.term_selector.select(
+            plan.question, plan.gost_number, terms
+        )
+        if not selection.terms:
+            return None
+        lines = [
+            f"В {plan.gost_number} раздел 3 содержит {len(terms)} терминов."
+        ]
+        if selection.criteria:
+            lines.append(f"Критерий отбора: {selection.criteria[:300]}")
+        lines.append("")
+        citations: list[Citation] = []
+        for term in selection.terms:
+            definition = re.sub(r"\s+", " ", term.definition).strip()
+            lines.append(
+                f"• {term.clause} {term.term} (с. {term.page}): {definition[:350]}"
+            )
+            citations.append(
+                Citation(
+                    gost=term.gost_number,
+                    clause=term.clause,
+                    page=term.page,
+                    quote=definition[:200],
+                    file=term.file,
+                    valid=True,
+                    page_valid=True,
+                    quote_valid=True,
+                )
+            )
+        if selection.fallback:
+            lines.extend(
+                [
+                    "",
+                    "Подбор выполнен по семантической близости; "
+                    "уточните критерий, если нужен более узкий список.",
+                ]
+            )
+        return Answer(
+            answer="\n".join(lines),
+            citations=citations,
+            confidence=0.75 if selection.fallback else 0.9,
+            model=selection.model,
+            provider=selection.provider,
+            tokens_in=selection.tokens_in,
+            tokens_out=selection.tokens_out,
+        )
+
 
     def _extract_clause_answer(
         self,

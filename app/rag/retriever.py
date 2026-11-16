@@ -8,7 +8,12 @@ import structlog
 from app.config import Settings
 from app.embeddings.base import Embedder
 from app.rag.chunk_store import ChunkStore
-from app.rag.gost_refs import build_gost_alias_map, resolve_gost_references
+from app.rag.gost_refs import (
+    GOST_FULL_RE,
+    build_gost_alias_map,
+    canonical_prefix,
+    resolve_gost_references,
+)
 from app.rag.query_classifier import (
     classify_question,
     extract_appendix,
@@ -20,7 +25,7 @@ from app.retrieval.bm25 import BM25Index
 from app.retrieval.fusion import rrf
 from app.storage.qdrant import QdrantStore
 
-GOST_RE = re.compile(r"(ГОСТ\s*Р|ПНСТ)\s*(\d+(?:\.\d+)?)\s*[—–-]\s*(\d{4})", re.IGNORECASE)
+GOST_RE = GOST_FULL_RE
 CLAUSE_RE = re.compile(r"(?:п\.?|пункт)\s*(\d+(?:\.\d+)+)", re.IGNORECASE)
 QUANT_RE = re.compile(r"\b(?:\d+|пятнадцать)\s+характеристик", re.IGNORECASE)
 LIST_MARKERS = ("какие", "перечисли", "этапы", "слои", "виды", "характеристики", "состав")
@@ -423,8 +428,8 @@ class Retriever:
             match = GOST_RE.search(query)
             if match:
                 gost = (
-                    f"{match.group(1).upper().replace('ГОСТР', 'ГОСТ Р')} "
-                    f"{match.group(2)}—{match.group(3)}"
+                    f"{canonical_prefix(match.group('prefix'))} "
+                    f"{match.group('number')}—{match.group('year')}"
                 )
         clause_match = CLAUSE_RE.search(query)
         clause = clause_match.group(1) if clause_match else None
