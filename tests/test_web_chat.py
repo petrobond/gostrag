@@ -43,6 +43,11 @@ def test_api_ask_creates_conversation_and_citation(monkeypatch):
     listing = client.get("/api/web/conversations").json()
     assert listing["conversations"][0]["messages"] == 2
 
+    stored = next(
+        message for message in store.messages.values() if message["role"] == "assistant"
+    )
+    assert "pdf_url" not in stored["citations_json"][0]
+
 
 def test_api_ask_requires_csrf(monkeypatch):
     client, store, _ = build_app(monkeypatch)
@@ -229,3 +234,27 @@ def test_new_conversation_button_creates_empty_dialog(monkeypatch):
     page = client.get(location)
     assert page.status_code == 200
     assert "Новый диалог" in page.text
+
+
+def test_first_question_replaces_default_title(monkeypatch):
+    client, store, _ = build_app(monkeypatch)
+    store.add_user("user@example.ru")
+    login(client, "user@example.ru")
+
+    created = client.post(
+        "/web/conversations/new",
+        data={"csrf_token": csrf_token(client)},
+        follow_redirects=False,
+    )
+    conversation_id = created.headers["location"].rsplit("/", 1)[-1]
+
+    client.post(
+        "/api/web/ask",
+        json={
+            "question": "Что такое качество данных?",
+            "conversation_id": conversation_id,
+        },
+        headers=_auth_headers(client),
+    )
+    conversation = client.get(f"/api/web/conversations/{conversation_id}").json()
+    assert conversation["title"] == "Что такое качество данных?"

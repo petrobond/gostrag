@@ -1,5 +1,4 @@
 {
-	email {$WEB_ACME_EMAIL}
 	admin off
 }
 

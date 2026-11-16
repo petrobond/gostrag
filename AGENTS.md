@@ -98,7 +98,7 @@ VPS (ultraVDS):
 Локально:
 
 ```bash
-.venv/bin/python -m pytest -q tests          # 130 тестов
+.venv/bin/python -m pytest -q tests          # 131 тест
 .venv/bin/python -m ruff check app bot eval tests
 .venv/bin/python scripts/net_matrix.py        # сеть: Telegram, VPS, Cloud.ru, GigaChat
 .venv/bin/python scripts/ask.py "вопрос"
@@ -175,7 +175,7 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 
 ## 9. Тесты и метрики (v3.2, BGE-M3)
 
-- `pytest`: **130 passed, 5 skipped**; ruff clean (app bot eval tests)
+- `pytest`: **131 passed, 5 skipped**; ruff clean (app bot eval tests)
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **1.000 (50/50)**,

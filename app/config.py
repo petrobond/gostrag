@@ -93,7 +93,6 @@ class Settings(BaseSettings):
     # Web UI (cookie sessions, invite-only)
     web_enabled: bool = Field(default=True, alias="WEB_ENABLED")
     web_domain: str = Field(default="", alias="WEB_DOMAIN")
-    web_acme_email: str = Field(default="", alias="WEB_ACME_EMAIL")
     web_cookie_secure: bool = Field(default=True, alias="WEB_COOKIE_SECURE")
     web_session_ttl_days: int = Field(default=7, alias="WEB_SESSION_TTL_DAYS")
     web_session_idle_hours: int = Field(default=24, alias="WEB_SESSION_IDLE_HOURS")

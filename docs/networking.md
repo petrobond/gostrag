@@ -63,8 +63,8 @@
 | `https://<WEB_DOMAIN>:443` | веб-интерфейс (Caddy) | напрямую |
 | `http://<WEB_DOMAIN>:80` | ACME HTTP-01 и редирект на HTTPS | напрямую |
 
-- Домен задаётся в `deploy/.env` (`WEB_DOMAIN`, `WEB_ACME_EMAIL`); DNS A-запись
-  указывает на `45.15.252.185`.
+- Домен задаётся в `deploy/.env` (`WEB_DOMAIN`); DNS A-запись указывает
+  на `45.15.252.185`. Значение — без схемы (`gost.example.ru`).
 - Открыть TCP 80/443 на VPS и у провайдера; SSH 22 не меняется.
 - Caddy получает сертификат Let's Encrypt автоматически и продлевает его.
 - `/api/ask` и `/health` снаружи отвечают 404; Qdrant/PG/Redis остаются

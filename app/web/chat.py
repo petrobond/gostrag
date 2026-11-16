@@ -32,19 +32,21 @@ def conversation_title(question: str) -> str:
     return question[:80] + ("…" if len(question) > 80 else "")
 
 
-def citations_payload(citations, s3) -> list[dict]:
-    payload: list[dict] = []
+def citations_with_links(citations: list[dict], s3) -> list[dict]:
+    result: list[dict] = []
     for citation in citations:
-        item = asdict(citation)
+        item = dict(citation)
         url = ""
-        if s3 is not None and citation.file:
+        file = str(item.get("file") or "")
+        page = item.get("page") or 0
+        if s3 is not None and file:
             try:
-                url = s3.url_for(citation.file, citation.page)
+                url = s3.url_for(file, int(page))
             except Exception:  # noqa: BLE001 - a broken S3 must not break answers
                 url = ""
         item["pdf_url"] = url
-        payload.append(item)
-    return payload
+        result.append(item)
+    return result
 
 
 def parse_citations(value: Any) -> list[dict]:
@@ -70,12 +72,13 @@ def serialize_conversation(conversation: dict) -> dict:
     return payload
 
 
-def serialize_message(message: dict) -> dict:
+def serialize_message(message: dict, s3=None) -> dict:
+    citations = citations_with_links(parse_citations(message.get("citations_json")), s3)
     return {
         "id": str(message["id"]),
         "role": message["role"],
         "content": message["content"],
-        "citations": parse_citations(message.get("citations_json")),
+        "citations": citations,
         "refused": bool(message.get("refused")),
         "latency_ms": message.get("latency_ms"),
         "model": message.get("model"),
@@ -143,24 +146,29 @@ async def ask_and_store(
         existing = await store.create_conversation(user_id, conversation_title(question))
     user_message = await store.add_message(existing["id"], "user", question)
     answer = result.answer
-    citations = citations_payload(answer.citations, state.s3)
+    stored_citations = [asdict(citation) for citation in answer.citations]
     assistant_message = await store.add_message(
         existing["id"],
         "assistant",
         answer.answer,
-        citations_json=citations,
+        citations_json=stored_citations,
         refused=answer.refused,
         latency_ms=result.latency_ms,
         model=answer.model or None,
     )
-    await store.touch_conversation(existing["id"])
+    new_title = (
+        conversation_title(question)
+        if existing.get("title") == DEFAULT_TITLE
+        else None
+    )
+    await store.touch_conversation(existing["id"], new_title)
 
     return {
         "conversation_id": str(existing["id"]),
         "message_id": str(assistant_message["id"]),
         "user_message_id": str(user_message["id"]),
         "answer": answer.answer,
-        "citations": citations,
+        "citations": citations_with_links(stored_citations, state.s3),
         "refused": answer.refused,
         "general_knowledge": answer.general_knowledge,
         "missing": answer.missing,

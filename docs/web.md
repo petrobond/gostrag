@@ -121,8 +121,7 @@ sudo docker compose -f deploy/docker-compose.yml run --rm app python -m app.cli 
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
 | `WEB_ENABLED` | `true` | включить веб-маршруты |
-| `WEB_DOMAIN` | пусто | публичный домен для Caddy и ссылок приглашений |
-| `WEB_ACME_EMAIL` | пусто | email для Let's Encrypt |
+| `WEB_DOMAIN` | пусто | публичный домен для Caddy и ссылок приглашений (без схемы) |
 | `WEB_COOKIE_SECURE` | `true` | `Secure` + префикс `__Host-` (локально `false`) |
 | `WEB_SESSION_TTL_DAYS` | `7` | абсолютный срок сессии |
 | `WEB_SESSION_IDLE_HOURS` | `24` | idle-таймаут |

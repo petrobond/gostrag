@@ -51,9 +51,10 @@ async def get_conversation(request: Request, conversation_id: str) -> dict:
     if conversation is None:
         raise HTTPException(status_code=404, detail="conversation not found")
     messages = await store.list_messages(conversation["id"])
+    s3 = getattr(request.app.state, "s3", None)
     return {
         **serialize_conversation(conversation),
-        "messages": [serialize_message(message) for message in messages],
+        "messages": [serialize_message(message, s3) for message in messages],
     }
 
 

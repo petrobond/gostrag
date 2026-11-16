@@ -13,6 +13,7 @@ from app.web.chat import (
     ConversationNotFound,
     ServiceUnavailable,
     ask_and_store,
+    citations_with_links,
     clean_question,
     parse_citations,
 )
@@ -43,8 +44,11 @@ async def _context(request: Request, user: dict, conversation_id: str | None = N
         if conversation is None:
             return None
         messages = await store.list_messages(conversation["id"])
+        s3 = getattr(request.app.state, "s3", None)
         for message in messages:
-            message["citations"] = parse_citations(message.get("citations_json"))
+            message["citations"] = citations_with_links(
+                parse_citations(message.get("citations_json")), s3
+            )
     return {
         "conversations": conversations,
         "conversation": conversation,

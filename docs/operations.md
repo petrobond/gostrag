@@ -105,8 +105,8 @@ curl -s localhost:8000/health
   остаётся на `127.0.0.1:8000`.
 - Порты: открыть TCP 80/443 (ufw + панель провайдера). Qdrant, PostgreSQL и
   Redis не публикуются.
-- Переменные в `deploy/.env`: `WEB_DOMAIN`, `WEB_ACME_EMAIL`, `WEB_*`
-  (шаблон — `deploy/.env.example`). Без `WEB_DOMAIN` proxy не запускается.
+- Переменные в `deploy/.env`: `WEB_DOMAIN` и `WEB_*` (шаблон —
+  `deploy/.env.example`). Без `WEB_DOMAIN` proxy не запускается.
 - `/api/ask` и `/health` снаружи закрыты (404), доступны только с VPS.
 
 Первый администратор:
