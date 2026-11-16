@@ -52,7 +52,9 @@ async def _init_web(app: FastAPI, cfg: Settings) -> None:
         app.state.db = pool
         app.state.web_store = WebStore(pool)
         try:
-            app.state.s3 = S3Store(cfg)
+            app.state.s3 = await asyncio.wait_for(
+                asyncio.to_thread(S3Store, cfg), timeout=15
+            )
         except Exception as exc:  # noqa: BLE001 - PDF links are optional
             logger.warning("s3 links disabled: %s", exc.__class__.__name__)
             app.state.s3 = None
@@ -60,6 +62,8 @@ async def _init_web(app: FastAPI, cfg: Settings) -> None:
         logger.info("web ui ready")
     except Exception as exc:  # noqa: BLE001 - degraded mode instead of crash
         logger.warning("web disabled: %s", exc.__class__.__name__)
+        app.state.web_store = None
+        app.state.web_ready = False
         await pool.close()
         app.state.db = None
 
