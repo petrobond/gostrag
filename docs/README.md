@@ -14,9 +14,12 @@
 | `audit_methodology.md` | Методика LLM-as-a-judge | — |
 | `compliance_matrix.md` | Итоговая матрица | все |
 | `operations.md` | Эксплуатация | — |
-| `web.md` | Веб-интерфейс и авторизация (v3.3.0) | — |
-| `adr/001-web-ui-auth.md` | ADR: варианты, auth, TLS | — |
-| `reports/3.3.0/resources.md` | Ресурсы веб-интерфейса | — |
+
+## Веб-интерфейс (v3.3.0)
+
+- `web.md` — архитектура, маршруты, безопасность, эксплуатация.
+- `adr/001-web-ui-auth.md` — ADR: варианты A/B/C, auth, TLS.
+- `reports/3.3.0/resources.md` — замеры RAM и статики.
 
 ## Связанные планы
 
@@ -24,6 +27,7 @@
 - `plans/02-gost-compliance.md` — проверка плана и альтернативы.
 - `plans/03-gold-set.md` — 30 вопросов.
 - `plans/04-decisions.md` — ADR.
+- `plans/09-plan-v3.3-web-ui-auth.md` — план веб-интерфейса v3.3.0.
 
 ## Ограничения
 
