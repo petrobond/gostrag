@@ -1,3 +1,5 @@
+import asyncio
+
 from web_support import FakeAskService, build_app, csrf_token, login
 
 
@@ -236,7 +238,35 @@ def test_new_conversation_button_creates_empty_dialog(monkeypatch):
     assert "Новый диалог" in page.text
 
 
+def test_meta_citation_hides_clause_label(monkeypatch):
+    client, store, _ = build_app(monkeypatch)
+    user = store.add_user("user@example.ru")
+    login(client, "user@example.ru")
+    conversation = asyncio.run(store.create_conversation(user["id"], "Список"))
+    asyncio.run(
+        store.add_message(
+            conversation["id"],
+            "assistant",
+            "В корпусе 1 стандарт.",
+            citations_json=[
+                {
+                    "gost": "ГОСТ Р 1—2024",
+                    "clause": "meta",
+                    "page": 1,
+                    "quote": "Первый стандарт",
+                    "file": "one.pdf",
+                }
+            ],
+        )
+    )
+    page = client.get(f"/chat/{conversation['id']}")
+    assert page.status_code == 200
+    assert "ГОСТ Р 1—2024, с. 1" in page.text
+    assert "п. meta" not in page.text
+
+
 def test_first_question_replaces_default_title(monkeypatch):
+
     client, store, _ = build_app(monkeypatch)
     store.add_user("user@example.ru")
     login(client, "user@example.ru")

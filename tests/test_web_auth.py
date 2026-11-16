@@ -197,3 +197,15 @@ def test_no_local_storage_in_web_assets():
 def test_login_sets_csrf_cookie(monkeypatch):
     client, _, _ = build_app(monkeypatch)
     assert start(client)
+
+
+def test_composer_enter_submits_without_newline():
+    root = Path(__file__).resolve().parents[1] / "app" / "web"
+    template = (root / "templates" / "partials" / "thread_inner.html").read_text(
+        encoding="utf-8"
+    )
+    script = (root / "static" / "app.js").read_text(encoding="utf-8")
+    assert "data-enter-submit" in template
+    assert "requestSubmit" in script
+    assert "shiftKey" in script
+    assert "isComposing" in script

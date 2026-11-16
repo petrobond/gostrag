@@ -32,10 +32,11 @@
           <div class="citations-title">Источники</div>
           {% for citation in message.citations %}
           <div class="citation">
+            {% set citation_label %}{{ citation.gost }}{% if citation.clause and citation.clause != 'meta' %}, п. {{ citation.clause }}{% endif %}, с. {{ citation.page }}{% endset %}
             {% if citation.pdf_url %}
-            <a href="{{ citation.pdf_url }}" target="_blank" rel="noopener noreferrer">{{ citation.gost }}, п. {{ citation.clause }}, с. {{ citation.page }}</a>
+            <a href="{{ citation.pdf_url }}" target="_blank" rel="noopener noreferrer">{{ citation_label }}</a>
             {% else %}
-            <span>{{ citation.gost }}, п. {{ citation.clause }}, с. {{ citation.page }}</span>
+            <span>{{ citation_label }}</span>
             {% endif %}
             {% if citation.quote %}<div class="quote">{{ citation.quote }}</div>{% endif %}
           </div>
@@ -66,6 +67,7 @@
   {% if conversation %}<input type="hidden" name="conversation_id" value="{{ conversation.id }}">{% endif %}
   <label class="composer-label" for="question">Вопрос по ГОСТам</label>
   <textarea id="question" name="question" rows="2" maxlength="1000" required
+            data-enter-submit
             placeholder="Например: какие характеристики качества данных определены в ГОСТ Р 71476?">{{ question or '' }}</textarea>
   <div class="composer-actions">
     <span class="hint">Ответ — с цитатами: ГОСТ, пункт, страница, PDF.</span>
