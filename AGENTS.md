@@ -185,6 +185,9 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
   faithfulness/relevancy 0.96/0.96, citation 1.0, citation recall **1.000 (58/58)**;
   M04, X01, TB01, KB10 — pass; v3.2.2 retrieval 1.0, judge 47/50
   (E04/M04/CL02 — strict-judge outliers, C05 исправлен split-part lookup)
+- v3.3.1: retrieval v3 **1.000**, v2 **1.000**; judge v3 46/50
+  (E03/E04/M04/CL02 — strict/variance outliers, их retrieval/классификация
+  не менялись); инвентарь — 37 стандартов/37 мета-цитат
 - gold-KB (10): **1.000 (10/10)**, citation **28/28** (v3.2.1); KB07 —
   «стандарты корпуса» → внутренняя ветка 71476, п. 2
 - audit v3.2: **157 требований / 15 ГОСТов**, N/A 15 (9.55%), coverage **90.45%**,
