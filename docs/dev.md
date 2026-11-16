@@ -86,3 +86,34 @@ Qdrant snapshot:
   --url http://localhost:6335 --collection gost_chunks_bge_m3_v3 \
   --out backups/$(date +%F)/qdrant.snapshot
 ```
+
+## 7. Веб-интерфейс (v3.3.0)
+
+```bash
+make dev-up
+make api            # WEB_COOKIE_SECURE=false, http://127.0.0.1:8000
+```
+
+Создать локального администратора и открыть `/login`:
+
+```bash
+.venv/bin/python -m app.cli web-user create \
+  --email admin@example.ru --role admin --password-stdin
+```
+
+Тесты:
+
+```bash
+.venv/bin/python -m pytest -q tests
+TEST_POSTGRES_DSN='postgresql://gostrag:gostrag@127.0.0.1:5432/gostrag' \
+  .venv/bin/python -m pytest -q tests/test_web_store_pg.py
+```
+
+Особенности:
+
+- локально `WEB_COOKIE_SECURE=false` (иначе `Secure`-cookie не уходит по HTTP);
+- миграции `web_*` применяются автоматически на старте (`WEB_AUTOMIGRATE=true`);
+- без PostgreSQL приложение поднимается в деградированном режиме
+  (`/health` → `web_ready: false`);
+- шаблоны и статика — `app/web/templates`, `app/web/static` (htmx закоммичен,
+  npm не нужен).

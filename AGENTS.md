@@ -30,8 +30,11 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
 - `bot/` — aiogram 3: `/start`, `/help`, `/gosts`, `/stats`, `/ask`, текст;
   `/kb`, `/term`, `/links`; публичный доступ для всех, `/stats`, `/audit`,
   `/audit_status` — только владелец (TELEGRAM_ADMIN_IDS)
-- `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready)
-- версия продукта: **3.2.4** (pyproject = APP_VERSION = `/health`)
+- `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready, web_ready)
+- `app/web/` — веб-интерфейс v3.3.0: Jinja2 + htmx, cookie-сессии (`__Host-`,
+  HttpOnly, Secure), Argon2id, CSRF, приглашения, история диалогов, админка;
+  таблицы `web_*` в PostgreSQL, миграции в `app/web/migrations.py`
+- версия продукта: **3.3.0** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
 - Qdrant — коллекция `gost_chunks_bge_m3_v3` (BGE-M3, 4446 точек, корпус
@@ -59,7 +62,8 @@ VPS (ultraVDS):
   deploy-ключ `~/.ssh/vps_deploy_key` (ed25519) — для CI/CD
 - репозиторий `/opt/gostrag`, ветка `release/v3.0.0`
 - запуск: `cd /opt/gostrag && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`
-- сервисы: `app`, `bot`, `qdrant`, `postgres`, `redis`
+- сервисы: `app`, `bot`, `qdrant`, `postgres`, `redis`; `proxy` (Caddy, профиль
+  `proxy`) — только при заданном `WEB_DOMAIN`
 - **только runtime**: без VS Code Server, сборок, ingest и правок кода
 - секреты: `/opt/gostrag/secrets` (600), `deploy/.env` (600)
 - данные: `/opt/gostrag/data/{corpus,index,source}`
@@ -94,7 +98,7 @@ VPS (ultraVDS):
 Локально:
 
 ```bash
-.venv/bin/python -m pytest -q tests          # 89 тестов
+.venv/bin/python -m pytest -q tests          # 130 тестов
 .venv/bin/python -m ruff check app bot eval tests
 .venv/bin/python scripts/net_matrix.py        # сеть: Telegram, VPS, Cloud.ru, GigaChat
 .venv/bin/python scripts/ask.py "вопрос"
@@ -106,10 +110,16 @@ VPS (ultraVDS):
 
 ```bash
 make dev-up          # qdrant/postgres/redis
-make api             # uvicorn на 127.0.0.1:8000
+make api             # uvicorn на 127.0.0.1:8000 (WEB_COOKIE_SECURE=false)
 make test            # pytest
 make lint            # ruff
 make seed-qdrant     # восстановить snapshot прода
+
+# веб-интерфейс
+.venv/bin/python -m app.cli web-user create --email admin@example.ru --role admin --password-stdin
+bash scripts/smoke_web.sh http://127.0.0.1:8000
+TEST_POSTGRES_DSN='postgresql://gostrag:gostrag@127.0.0.1:5432/gostrag' \
+  .venv/bin/python -m pytest -q tests/test_web_store_pg.py
 ```
 
 Ингест (локально, только при необходимости):
@@ -165,7 +175,7 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 
 ## 9. Тесты и метрики (v3.2, BGE-M3)
 
-- `pytest`: **91 passed**; ruff clean (app bot eval tests)
+- `pytest`: **130 passed, 5 skipped**; ruff clean (app bot eval tests)
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **1.000 (50/50)**,
@@ -179,6 +189,15 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 - reranker `bge-reranker-v2-m3`: A/B recall@8 1.000 → 0.740, top1 37 → 23 — **не используется**
 
 ## 10. Известные проблемы
+
+- 2026-11-16: веб v3.3.0 требует `WEB_DOMAIN` и открытые TCP 80/443; без домена
+  профиль `proxy` (Caddy) не запускается, приложение остаётся на `127.0.0.1:8000`
+- 2026-11-16: в вебе нет SMTP — приглашения и сброс пароля передаются вручную
+  одноразовой ссылкой; публичной регистрации нет
+- 2026-11-16: admin веба (`web_users.role='admin'`) не связан с
+  `TELEGRAM_ADMIN_IDS`; роль назначается только через CLI
+- 2026-11-16: `qa_log`/`usage_daily` не смешиваются с веб-сессиями; статистика
+  веба считается по `web_messages`
 
 - 2026-11-13: VPS — только runtime; `.vscode-server` удалён, build cache очищен
 - GigaChat: `verify=True`; Russian Trusted Root/Sub CA в `deploy/certs` (этап 6 закрыт)
@@ -222,7 +241,8 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 Релизы: `v3.1.0` (TB01, KB10, инфраструктура), `v3.2.0` (аудит + `/audit`),
 `v3.2.1` (KB07 «стандарты корпуса», deploy chown), `v3.2.2` (структура `/kb`,
 outline и corpus `2026.11.13-r2`), `v3.2.3` (меню команд Telegram),
-`v3.2.4` (публичный доступ, админ-команды только владельцу).
+`v3.2.4` (публичный доступ, админ-команды только владельцу),
+`v3.3.0` (веб-интерфейс и авторизация; план `plans/09-plan-v3.3-web-ui-auth.md`).
 
 ## 12. Чек-лист приёмки этапа 0
 

@@ -14,6 +14,9 @@
 | `audit_methodology.md` | Методика LLM-as-a-judge | — |
 | `compliance_matrix.md` | Итоговая матрица | все |
 | `operations.md` | Эксплуатация | — |
+| `web.md` | Веб-интерфейс и авторизация (v3.3.0) | — |
+| `adr/001-web-ui-auth.md` | ADR: варианты, auth, TLS | — |
+| `reports/3.3.0/resources.md` | Ресурсы веб-интерфейса | — |
 
 ## Связанные планы
 

@@ -92,11 +92,46 @@ ingest и правок кода. Разработка — только лока�
 
 Не трогать: `ProBack_SA` (`proback-rag-bot.service`), AWG `awg0`,
 `deploy/.env`, volumes `gostrag_*`. VS Code Server на VPS не возвращать.
-
 Проверка после очистки:
 
 ```bash
 ssh ultra 'df -h /; free -h; sudo docker system df; systemctl is-active proback-rag-bot'
 curl -s localhost:8000/health
 ```
+
+## 10. Веб-интерфейс (v3.3.0)
+
+- Публичный вход: `https://$WEB_DOMAIN` (Caddy, профиль `proxy`), приложение
+  остаётся на `127.0.0.1:8000`.
+- Порты: открыть TCP 80/443 (ufw + панель провайдера). Qdrant, PostgreSQL и
+  Redis не публикуются.
+- Переменные в `deploy/.env`: `WEB_DOMAIN`, `WEB_ACME_EMAIL`, `WEB_*`
+  (шаблон — `deploy/.env.example`). Без `WEB_DOMAIN` proxy не запускается.
+- `/api/ask` и `/health` снаружи закрыты (404), доступны только с VPS.
+
+Первый администратор:
+
+```bash
+cd /opt/gostrag
+sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env \
+  run --rm app python -m app.cli web-user create \
+  --email bondarev-petr@yandex.ru --role admin
+```
+
+Проверка:
+
+```bash
+curl -s localhost:8000/health | python -m json.tool   # web_ready: true
+curl -s -o /dev/null -w '%{http_code}\n' "https://$WEB_DOMAIN/login"          # 200
+curl -s -o /dev/null -w '%{http_code}\n' "https://$WEB_DOMAIN/api/ask"        # 404
+bash scripts/smoke_web.sh http://127.0.0.1:8000
+```
+
+Пользователи: `/admin/users` (приглашение, блокировка, сброс пароля).
+SMTP нет — ссылки передаются вручную и одноразовы.
+
+Бэкап веб-таблиц входит в общий `pg_dump` деплой-скрипта. Откат на `v3.2.4`
+безопасен: старый образ не использует таблицы `web_*`.
+
+Подробно: `docs/web.md`.
 

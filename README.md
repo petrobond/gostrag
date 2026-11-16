@@ -78,6 +78,24 @@ docker compose -f deploy/docker-compose.yml up -d qdrant
 
 Telegram: **@pbondarev_gostrag_bot** (открыт для всех; `/stats`, `/audit`, `/audit_status` — только владелец).
 
+## Веб-интерфейс (v3.3.0)
+
+Лёгкий веб-клиент на FastAPI + Jinja2 + htmx: вход по приглашению (email + пароль),
+чат по ГОСТам с цитатами и PDF-ссылками `#page=N`, история диалогов, админка
+(статистика, пользователи, документы, аудит). Серверные cookie-сессии, Argon2id,
+CSRF; JWT в `localStorage` не используется. Node.js в runtime нет.
+
+```bash
+make dev-up                       # PostgreSQL/Qdrant/Redis
+make api                          # http://127.0.0.1:8000 (WEB_COOKIE_SECURE=false)
+.venv/bin/python -m app.cli web-user create \
+  --email admin@example.ru --role admin --password-stdin
+bash scripts/smoke_web.sh http://127.0.0.1:8000
+```
+
+Подробно: `docs/web.md`, `docs/adr/001-web-ui-auth.md`. TLS — Caddy в профиле
+`proxy` (`deploy/Caddyfile`), включается при заданном `WEB_DOMAIN`.
+
 ## Ссылки на источники
 
 Каждая цитата в боте содержит ссылку на PDF в Object Storage с якорем страницы:

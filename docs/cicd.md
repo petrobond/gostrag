@@ -155,3 +155,18 @@ gh secret list -R petrobond/gostrag
 gh run list -R petrobond/gostrag --limit 5
 ssh ultra 'curl -s localhost:8000/health'
 ```
+
+
+## 9. Веб-интерфейс (v3.3.0)
+
+- CI: job `lint-test` поднимает `postgres:16-alpine` и передаёт
+  `TEST_POSTGRES_DSN`; интеграционные тесты `test_web_store_pg.py` выполняются,
+  локально без DSN — пропускаются.
+- Сборка образа не изменилась (Node.js не нужен): шаблоны и статика лежат в
+  `app/web` и попадают в образ через `COPY app ./app`.
+- Деплой: если в `deploy/.env` задан `WEB_DOMAIN`, скрипт добавляет
+  `--profile proxy`, тянет `caddy:2-alpine` и после `up` проверяет
+  `https://$WEB_DOMAIN/login` (200) и недоступность `/api/ask` (404).
+- Новые переменные деплой не перезаписывает: их добавляет владелец в `deploy/.env`
+  (шаблон — `deploy/.env.example`).
+- Порты 80/443 должны быть открыты до первого деплоя с `WEB_DOMAIN`.
