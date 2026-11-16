@@ -313,9 +313,16 @@ class InMemoryWebStore:
 
 
 class FakeAskService:
-    def __init__(self, *, refused: bool = False, fail: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        refused: bool = False,
+        fail: bool = False,
+        answer_text: str = "Ответ по стандарту.",
+    ) -> None:
         self.refused = refused
         self.fail = fail
+        self.answer_text = answer_text
         self.calls: list[tuple[str, int | None]] = []
 
     async def ask(self, question: str, top_k: int | None = None):
@@ -333,7 +340,7 @@ class FakeAskService:
             quote_valid=True,
         )
         answer = Answer(
-            answer="Ответ по стандарту.",
+            answer="В корпусе нет ответа на этот вопрос." if self.refused else self.answer_text,
             citations=[] if self.refused else [citation],
             confidence=0.9,
             refused=self.refused,

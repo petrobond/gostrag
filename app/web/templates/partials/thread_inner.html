@@ -1,0 +1,74 @@
+{% if conversation %}
+<div class="thread-head">
+  <div>
+    <h1>{{ conversation.title }}</h1>
+    <p class="muted small">Сообщений: {{ messages|length }}</p>
+  </div>
+  <form method="post" action="/web/conversations/{{ conversation.id }}/delete" class="inline"
+        onsubmit="return confirm('Удалить диалог?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="danger">Удалить диалог</button>
+  </form>
+</div>
+{% else %}
+<div class="thread-head">
+  <div>
+    <h1>Новый диалог</h1>
+    <p class="muted small">Задайте вопрос по ГОСТам — ответ придёт с цитатами.</p>
+  </div>
+</div>
+{% endif %}
+
+<div class="messages">
+  {% for message in messages %}
+    {% if message.role == 'user' %}
+    <article class="msg msg-user"><div class="bubble">{{ message.content }}</div></article>
+    {% else %}
+    <article class="msg msg-assistant">
+      <div class="bubble">
+        <div class="answer">{{ message.content }}</div>
+        {% if message.citations %}
+        <div class="citations">
+          <div class="citations-title">Источники</div>
+          {% for citation in message.citations %}
+          <div class="citation">
+            {% if citation.pdf_url %}
+            <a href="{{ citation.pdf_url }}" target="_blank" rel="noopener noreferrer">{{ citation.gost }}, п. {{ citation.clause }}, с. {{ citation.page }}</a>
+            {% else %}
+            <span>{{ citation.gost }}, п. {{ citation.clause }}, с. {{ citation.page }}</span>
+            {% endif %}
+            {% if citation.quote %}<div class="quote">{{ citation.quote }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="meta">
+        {% if message.latency_ms %}{{ message.latency_ms }} мс{% endif %}
+        {% if message.model %}{% if message.latency_ms %} · {% endif %}{{ message.model }}{% endif %}
+      </div>
+    </article>
+    {% endif %}
+  {% else %}
+  <div class="empty">
+    <p>Например: «Что такое качество данных по ГОСТ Р 71476?»</p>
+  </div>
+  {% endfor %}
+</div>
+
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+
+<form class="composer" method="post" action="/web/ask"
+      hx-post="/web/ask" hx-target="#thread-inner" hx-swap="innerHTML"
+      hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'
+      hx-disabled-elt="button">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% if conversation %}<input type="hidden" name="conversation_id" value="{{ conversation.id }}">{% endif %}
+  <label class="composer-label" for="question">Вопрос по ГОСТам</label>
+  <textarea id="question" name="question" rows="2" maxlength="1000" required
+            placeholder="Например: какие характеристики качества данных определены в ГОСТ Р 71476?">{{ question or '' }}</textarea>
+  <div class="composer-actions">
+    <span class="hint">Ответ — с цитатами: ГОСТ, пункт, страница, PDF.</span>
+    <button type="submit" class="primary">Отправить</button>
+  </div>
+</form>

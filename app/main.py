@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -14,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.ask import router as ask_router
 from app.audit.version import get_git_commit
 from app.config import Settings, get_settings
+from app.guard.rate_limit import SlidingWindowLimiter
 from app.rag.service import AskService
 from app.storage.s3 import S3Store
 from app.web.auth import LoginRequired, attach_security_headers
@@ -95,16 +97,21 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.state.login_throttle = LoginThrottle(
         cfg.web_login_ip_limit, cfg.web_login_email_limit, cfg.web_login_window_min
     )
+    app.state.web_hour_limiter = SlidingWindowLimiter(cfg.hourly_questions_per_user, 3600)
+    app.state.web_day_limiter = SlidingWindowLimiter(cfg.daily_questions_per_user, 86400)
+    app.state.ask_semaphore = asyncio.Semaphore(cfg.web_max_concurrent_asks)
 
     app.include_router(ask_router, prefix="/api")
 
     if cfg.web_enabled:
         from app.web.routes_api import router as web_api_router
+        from app.web.routes_chat import router as web_chat_router
         from app.web.routes_pages import router as web_pages_router
         from app.web.templating import STATIC_DIR
 
         app.include_router(web_pages_router)
-        app.include_router(web_api_router)
+        app.include_router(web_chat_router)
+        app.include_router(web_api_router, prefix="/api/web")
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
         @app.exception_handler(LoginRequired)

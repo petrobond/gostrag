@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Чат — gostrag{% endblock %}
+{% block main_class %}chat-main{% endblock %}
+{% block content %}
+<div class="chat-shell">
+  <aside class="sidebar">
+    <form method="post" action="/web/conversations/new" class="inline new-chat">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="primary wide">+ Новый диалог</button>
+    </form>
+    {% include "partials/conversation_list.html" %}
+  </aside>
+  <section class="thread">
+    <div id="thread-inner" class="thread-inner" data-scroll-bottom>
+      {% include "partials/thread_inner.html" %}
+    </div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/htmx.min.js?v={{ app_version }}" defer></script>{% endblock %}

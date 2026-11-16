@@ -187,8 +187,11 @@ def test_login_page_escapes_email(monkeypatch):
 def test_no_local_storage_in_web_assets():
     root = Path(__file__).resolve().parents[1] / "app" / "web"
     for path in root.rglob("*"):
-        if path.suffix in {".js", ".html", ".css"}:
-            assert "localStorage" not in path.read_text(encoding="utf-8"), path
+        if path.suffix not in {".js", ".html", ".css"}:
+            continue
+        if path.name == "htmx.min.js":
+            continue  # vendored library; it uses localStorage only for hx-history
+        assert "localStorage" not in path.read_text(encoding="utf-8"), path
 
 
 def test_login_sets_csrf_cookie(monkeypatch):

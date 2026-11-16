@@ -1,0 +1,17 @@
+<nav id="conversation-list" class="conversations"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% for item in conversations %}
+  <div class="conversation{% if conversation and item.id == conversation.id %} active{% endif %}">
+    <a href="/chat/{{ item.id }}" class="conversation-link">
+      <span class="conversation-title">{{ item.title }}</span>
+      <span class="conversation-count">{{ item.messages }}</span>
+    </a>
+    <form method="post" action="/web/conversations/{{ item.id }}/delete" class="inline"
+          onsubmit="return confirm('Удалить диалог?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="icon-button" title="Удалить диалог" aria-label="Удалить диалог">×</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="muted small sidebar-empty">Диалогов пока нет.</p>
+  {% endfor %}
+</nav>
