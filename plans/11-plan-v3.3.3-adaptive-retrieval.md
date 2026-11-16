@@ -148,7 +148,7 @@ MVP v3.3.3 реализует:
 | 3 | embedding-кандидаты + LLM selector + verifier | сделано |
 | 4 | adaptive planner и fallback в AskService | сделано |
 | 5 | pytest/ruff, gold v2/v3, judge, ручные вопросы | сделано (167 passed; judge 47/50) |
-| 6 | docs, версия, тег, deploy, smoke | ожидает |
+| 6 | docs, версия, тег, deploy, smoke | сделано (v3.3.3 в проде) |
 
 ## Приёмка
 
