@@ -50,7 +50,7 @@ fi
 
 "${COMPOSE[@]}" "${PROFILES[@]}" pull app bot data
 if [ -n "$WEB_DOMAIN" ]; then
-  "${COMPOSE[@]}" pull proxy
+  "${COMPOSE[@]}" --profile proxy pull proxy
 fi
 if [ -n "${DATA_VERSION:-}" ]; then
   "${COMPOSE[@]}" --profile data run --rm -T data \
