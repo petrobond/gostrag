@@ -114,7 +114,7 @@ class Settings(BaseSettings):
     queue_max_depth: int = Field(default=5, alias="QUEUE_MAX_DEPTH")
 
     # App
-    app_version: str = Field(default="3.2.4", alias="APP_VERSION")
+    app_version: str = Field(default="3.3.0", alias="APP_VERSION")
     ask_api_url: str = Field(default="", alias="ASK_API_URL")
     corpus_version: str = Field(default="2026.11.13-r2", alias="CORPUS_VERSION")
     data_source_dir: str = Field(default="/data/source", alias="DATA_SOURCE_DIR")
