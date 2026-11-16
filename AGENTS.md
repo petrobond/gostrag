@@ -34,7 +34,10 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
 - `app/web/` — веб-интерфейс v3.3.0: Jinja2 + htmx, cookie-сессии (`__Host-`,
   HttpOnly, Secure), Argon2id, CSRF, приглашения, история диалогов, админка;
   таблицы `web_*` в PostgreSQL, миграции в `app/web/migrations.py`
-- версия продукта: **3.3.0** (pyproject = APP_VERSION = `/health`)
+- RAG: короткие номера ГОСТов (`ГОСТ Р 71476`) раскрываются по манифесту корпуса;
+  список стандартов отвечает детерминированно из `documents.json` (37 стандартов,
+  38 документов, 37 мета-цитат)
+- версия продукта: **3.3.1** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
 - Qdrant — коллекция `gost_chunks_bge_m3_v3` (BGE-M3, 4446 точек, корпус
@@ -98,7 +101,7 @@ VPS (ultraVDS):
 Локально:
 
 ```bash
-.venv/bin/python -m pytest -q tests          # 131 тест
+.venv/bin/python -m pytest -q tests          # 150 тестов
 .venv/bin/python -m ruff check app bot eval tests
 .venv/bin/python scripts/net_matrix.py        # сеть: Telegram, VPS, Cloud.ru, GigaChat
 .venv/bin/python scripts/ask.py "вопрос"
@@ -175,7 +178,7 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 
 ## 9. Тесты и метрики (v3.2, BGE-M3)
 
-- `pytest`: **131 passed, 5 skipped**; ruff clean (app bot eval tests)
+- `pytest`: **150 passed, 5 skipped**; ruff clean (app bot eval tests)
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **1.000 (50/50)**,
@@ -242,7 +245,9 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 `v3.2.1` (KB07 «стандарты корпуса», deploy chown), `v3.2.2` (структура `/kb`,
 outline и corpus `2026.11.13-r2`), `v3.2.3` (меню команд Telegram),
 `v3.2.4` (публичный доступ, админ-команды только владельцу),
-`v3.3.0` (веб-интерфейс и авторизация; план `plans/09-plan-v3.3-web-ui-auth.md`).
+`v3.3.0` (веб-интерфейс и авторизация; план `plans/09-plan-v3.3-web-ui-auth.md`),
+`v3.3.1` (короткие ГОСТы, инвентарь корпуса, Enter в чате; план
+`plans/10-plan-v3.3.1-rag-answers.md`).
 
 ## 12. Чек-лист приёмки этапа 0
 

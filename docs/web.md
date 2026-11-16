@@ -189,7 +189,12 @@ curl -s -o /dev/null -w '%{http_code}\n' https://$WEB_DOMAIN/login  # 200
 curl -s -o /dev/null -w '%{http_code}\n' https://$WEB_DOMAIN/api/ask  # 404
 ```
 
-### 8.4. Логи
+### 8.4. Поле вопроса
+
+**Enter** отправляет вопрос, **Shift+Enter** добавляет новую строку.
+Повторная отправка во время запроса блокируется, пока кнопка недоступна.
+
+### 8.5. Логи
 
 ```bash
 sudo docker compose -f deploy/docker-compose.yml logs --tail=100 app
