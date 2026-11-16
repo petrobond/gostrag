@@ -1,1 +1,1 @@
-"""Access guards: whitelist, rate limit, quotas."""
+"""Access guards: rate limits and quotas."""

@@ -112,7 +112,7 @@ async def cmd_start(message: Message) -> None:
         "Привет! Я отвечаю на вопросы по российским стандартам ИИ (ГОСТ Р / ПНСТ).\n\n"
         "Просто задайте вопрос текстом. Я приведу цитаты: ГОСТ, пункт, страницу "
         "и ссылку на PDF с переходом на нужную страницу.\n\n"
-        "Команды: /help, /gosts, /ask <вопрос>, /audit (whitelist).\n"
+        "Команды: /help, /gosts, /ask <вопрос>.\n"
         "База знаний: /kb <ГОСТ>, /term <термин>, /links <ГОСТ>."
     )
 
@@ -125,7 +125,7 @@ async def cmd_help(message: Message) -> None:
         "2. Получите ответ со ссылками на пункты.\n"
         "3. Если ответа нет в корпусе — я скажу об этом.\n\n"
         "Команды: /gosts — список стандартов, /stats — статистика (админ).\n"
-        "Аудит: /audit — ГОСТ-аудит версии (whitelist/админ), /audit_status — статус.\n"
+        "Аудит: /audit — ГОСТ-аудит версии (админ), /audit_status — статус (админ).\n"
         "База знаний: /kb <ГОСТ> — разделы, /term <термин> — определение, "
         "/links <ГОСТ> — ссылки. «п.» — пункт стандарта."
     )
@@ -280,9 +280,8 @@ async def _notify_audit(
 @dp.message(Command("audit"))
 async def cmd_audit(message: Message) -> None:
     user_id = message.from_user.id
-    allowed = settings.allowed_user_ids | settings.admin_user_ids
-    if user_id not in allowed:
-        await message.answer("Команда доступна только whitelist/администратору.")
+    if user_id not in settings.admin_user_ids:
+        await message.answer("Команда доступна только администратору.")
         return
     manifest_path = Path(settings.reports_dir) / settings.app_version / str(user_id) / "manifest.json"
     if manifest_path.exists():
@@ -315,6 +314,9 @@ async def cmd_audit(message: Message) -> None:
 @dp.message(Command("audit_status"))
 async def cmd_audit_status(message: Message) -> None:
     user_id = message.from_user.id
+    if user_id not in settings.admin_user_ids:
+        await message.answer("Команда доступна только администратору.")
+        return
     manifest_path = Path(settings.reports_dir) / settings.app_version / str(user_id) / "manifest.json"
     if manifest_path.exists():
         await message.answer(_audit_summary(manifest_path))
@@ -342,9 +344,6 @@ async def on_text(message: Message) -> None:
 
 async def handle_question(message: Message, question: str) -> None:
     user_id = message.from_user.id
-    if user_id not in settings.allowed_user_ids:
-        await message.answer("Доступ к боту ограничен.")
-        return
     if not hour_limiter.allow(user_id):
         await message.answer(
             f"Слишком много вопросов. Попробуйте через {hour_limiter.retry_after(user_id)} с."
@@ -393,9 +392,9 @@ async def handle_question(message: Message, question: str) -> None:
 
 
 async def setup_command_menu(bot: Bot) -> None:
-    """Register public commands globally and extended commands for admins."""
+    """Register public commands globally and extended commands for the admin."""
     await bot.set_my_commands(PUBLIC_COMMANDS)
-    for chat_id in sorted(settings.allowed_user_ids | settings.admin_user_ids):
+    for chat_id in sorted(settings.admin_user_ids):
         try:
             await bot.set_my_commands(
                 ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=chat_id)

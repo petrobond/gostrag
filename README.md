@@ -10,7 +10,7 @@ RAG-система по российским стандартам в облас�
 - **Эмбеддинги:** локальные `intfloat/multilingual-e5-large` (FastEmbed, ONNX, 1024 dim).
   GigaChat embeddings требуют оплаты (HTTP 402), поэтому по умолчанию отключены.
 - **Хранилища:** Qdrant (векторы), BM25 (разреженный индекс), PostgreSQL (метаданные, квоты, отчёты).
-- **Доступ:** только Telegram-бот, whitelist пользователей.
+- **Доступ:** Telegram-бот открыт для всех пользователей; админ-команды — только владельцу.
 - **Развёртывание:** локально в Docker Compose, затем перенос на VPS.
 
 ## Документы
@@ -76,7 +76,7 @@ docker compose -f deploy/docker-compose.yml up -d qdrant
 
 ## Бот
 
-Telegram: **@pbondarev_gostrag_bot** (доступ по whitelist).
+Telegram: **@pbondarev_gostrag_bot** (открыт для всех; `/stats`, `/audit`, `/audit_status` — только владелец).
 
 ## Ссылки на источники
 

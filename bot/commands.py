@@ -14,6 +14,6 @@ PUBLIC_COMMANDS = (
 
 ADMIN_COMMANDS = PUBLIC_COMMANDS + (
     BotCommand(command="stats", description="Статистика (админ)"),
-    BotCommand(command="audit", description="ГОСТ-аудит (whitelist)"),
+    BotCommand(command="audit", description="ГОСТ-аудит (админ)"),
     BotCommand(command="audit_status", description="Статус аудита"),
 )

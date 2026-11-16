@@ -8,7 +8,7 @@
 | Галлюцинация | Средняя | Высокое | Judge faithfulness | ≥ 0.85 |
 | Неверный отказ | Средняя | Среднее | Refusal accuracy | ≥ 0.90 |
 | Prompt injection | Средняя | Высокое | Adversarial-вопросы Q26–Q28 | 100% |
-| Утечка доступа | Низкая | Высокое | E2E whitelist | 100% |
+| Утечка доступа | Низкая | Высокое | E2E: публичный доступ + admin-only команды | 100% |
 | Перерасход токенов | Средняя | Высокое | Квоты и circuit breaker | 100% |
 | Потеря данных | Низкая | Высокое | Переиндексация из PDF | ≤ 30 мин |
 | Деградация retrieval | Средняя | Среднее | Recall@6 на gold set | ≥ 0.90 |
@@ -21,7 +21,7 @@
 | Integration | GigaChat, Qdrant, BM25, PostgreSQL | pytest |
 | E2E | Telegram → ответ с цитатой | pytest + mock |
 | Regression | gold set 30 вопросов | eval/judge.py |
-| Security | whitelist, injection, квоты | pytest |
+| Security | публичный доступ, admin-only команды, injection, квоты | pytest |
 | Нагрузка | 10 одновременных вопросов | asyncio |
 
 ## 3. Тестовые данные (ГОСТ Р 59898—2021)
