@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import time
 from dataclasses import asdict, dataclass
@@ -10,6 +11,11 @@ from app.embeddings.factory import get_embedder
 from app.kb.kb import KnowledgeBase
 from app.llm.chain import LLMChain
 from app.rag.chunk_store import ChunkStore
+from app.rag.corpus_catalog import (
+    build_corpus_standards,
+    build_meta_citations,
+    format_corpus_standards,
+)
 from app.rag.generator import Answer, Citation, Generator
 from app.rag.query_classifier import (
     classify_question,
@@ -55,6 +61,8 @@ class AskService:
         self.bm25 = BM25Index.load(index_dir / "bm25.pkl")
         self.qdrant = QdrantStore(qdrant_url, settings.qdrant_collection)
         self.chunks = ChunkStore(corpus_dir)
+        self.corpus_dir = Path(corpus_dir)
+        self.corpus_documents = self._load_corpus_documents()
         try:
             self.kb = KnowledgeBase()
         except (FileNotFoundError, ValueError):
@@ -66,7 +74,8 @@ class AskService:
 
     async def ask(self, question: str, top_k: int | None = None) -> AskResult:
         started = time.perf_counter()
-        question_type = classify_question(question)
+        resolved_question = self.retriever.resolve_query(question)
+        question_type = classify_question(resolved_question)
         if question_type == "injection":
             answer = Answer(
                 answer=(
@@ -79,49 +88,93 @@ class AskService:
             )
             return AskResult(answer=answer, chunks=[], latency_ms=0)
 
-        gosts = extract_gosts(question)
+        if question_type == "corpus_list":
+            corpus_answer = self._corpus_list_answer()
+            if corpus_answer is not None:
+                latency_ms = int((time.perf_counter() - started) * 1000)
+                return AskResult(answer=corpus_answer, chunks=[], latency_ms=latency_ms)
+
+        gosts = extract_gosts(resolved_question)
         if question_type == "clause_lookup":
-            extracted = self._extract_clause_answer(question, gosts)
+            extracted = self._extract_clause_answer(resolved_question, gosts)
             if extracted is not None:
                 answer, answer_chunks = extracted
                 latency_ms = int((time.perf_counter() - started) * 1000)
                 return AskResult(answer=answer, chunks=answer_chunks, latency_ms=latency_ms)
         if question_type == "comparison":
-            chunks = await self.retriever.retrieve_comparison(question, gosts, top_k=4)
+            chunks = await self.retriever.retrieve_comparison(
+                resolved_question, gosts, top_k=4
+            )
         else:
-            chunks = await self.retriever.retrieve(question, top_k=top_k or self.settings.max_top_k)
-        if question_type == "table" and self._is_table_list_question(question):
-            table_answer = self._table_answer(question, chunks)
+            chunks = await self.retriever.retrieve(
+                resolved_question, top_k=top_k or self.settings.max_top_k
+            )
+        if question_type == "table" and self._is_table_list_question(resolved_question):
+            table_answer = self._table_answer(resolved_question, chunks)
             if table_answer is not None:
                 latency_ms = int((time.perf_counter() - started) * 1000)
                 return AskResult(answer=table_answer, chunks=chunks, latency_ms=latency_ms)
-        answer = await self.generator.generate(question, [asdict(chunk) for chunk in chunks])
+        answer = await self.generator.generate(
+            resolved_question, [asdict(chunk) for chunk in chunks]
+        )
         if question_type == "comparison" and len(gosts) >= 2:
             self._append_comparison_facts(answer, chunks, gosts)
-        if self.kb is not None and gosts and re.search(r"раздел", question, re.IGNORECASE):
-            self._append_outline_facts(answer, question, gosts)
-        if self.kb is not None and gosts and (
-            "ссыл" in question.lower()
-            or "связаны" in question.lower()
-            or "внешн" in question.lower()
-            or self._is_external_links_question(question.lower())
+        if self.kb is not None and gosts and re.search(
+            r"раздел", resolved_question, re.IGNORECASE
         ):
-            self._append_kb_links(answer, question, gosts)
+            self._append_outline_facts(answer, resolved_question, gosts)
+        if self.kb is not None and gosts and (
+            "ссыл" in resolved_question.lower()
+            or "связаны" in resolved_question.lower()
+            or "внешн" in resolved_question.lower()
+            or self._is_external_links_question(resolved_question.lower())
+        ):
+            self._append_kb_links(answer, resolved_question, gosts)
         if (
             question_type in ("binary", "comparison")
-            and ("обязательн" in question.lower() or "статус" in question.lower())
+            and (
+                "обязательн" in resolved_question.lower()
+                or "статус" in resolved_question.lower()
+            )
             and "162-фз" not in answer.answer.lower()
         ):
             answer.answer = f"{answer.answer.rstrip()} {GENERAL_NOTE}"
             answer.general_knowledge = True
-        if question_type == "enumeration" and "характеристик" in question.lower():
+        if question_type == "enumeration" and "характеристик" in resolved_question.lower():
             answer.answer = self._append_enumeration_titles(answer.answer, chunks)
-        if question_type in ("enumeration", "table") and "показател" in question.lower():
+        if question_type in ("enumeration", "table") and "показател" in resolved_question.lower():
             answer.answer = self._append_enumeration_ids(answer.answer, chunks)
         if not answer.refused and not answer.citations:
             self._attach_fallback_citation(answer, chunks)
         latency_ms = int((time.perf_counter() - started) * 1000)
         return AskResult(answer=answer, chunks=chunks, latency_ms=latency_ms)
+
+    def _load_corpus_documents(self) -> list[dict]:
+        path = self.corpus_dir / "documents.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+        if not isinstance(data, list):
+            return []
+        return [item for item in data if isinstance(item, dict)]
+
+    def _corpus_list_answer(self) -> Answer | None:
+        standards = build_corpus_standards(self.corpus_documents)
+        if not standards:
+            return None
+        text = format_corpus_standards(
+            standards,
+            documents_total=len(self.corpus_documents),
+            corpus_version=self.settings.corpus_version,
+        )
+        return Answer(
+            answer=text,
+            citations=build_meta_citations(standards),
+            confidence=1.0,
+            model="deterministic:corpus_list",
+            provider="rules",
+        )
 
     def _extract_clause_answer(
         self,

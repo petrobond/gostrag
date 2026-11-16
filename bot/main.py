@@ -67,7 +67,9 @@ class RemoteAnswerService:
 
 
 def citation_html(citation) -> str:
-    label = f"{citation.gost}, п. {citation.clause}, с. {citation.page}"
+    clause = getattr(citation, "clause", "")
+    clause_label = f", п. {clause}" if clause and clause != "meta" else ""
+    label = f"{citation.gost}{clause_label}, с. {citation.page}"
     url = s3.url_for(citation.file, citation.page) if citation.file else ""
     if url:
         return f'<a href="{html.escape(url, quote=True)}">{html.escape(label)}</a>'

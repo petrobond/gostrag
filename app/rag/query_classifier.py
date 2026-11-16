@@ -22,6 +22,57 @@ INJECTION_MARKERS = (
     "ignore previous",
 )
 
+CORPUS_LIST_RE = re.compile(
+    r"(?:какие|какой|перечисли(?:те)?|список|перечень|назови(?:те)?)\s+"
+    r"(?:все\s+)?(?:есть\s+)?"
+    r"(?:гост(?:ы|ов)?|стандарт(?:ы|ов)?|пнст|нормативн\w*\s+документ\w*)",
+    re.IGNORECASE,
+)
+CORPUS_LIST_NEGATIVE = (
+    "характеристик",
+    "этап",
+    "слой",
+    "требован",
+    "показател",
+    "вид",
+    "состав",
+    "пункт",
+    "раздел",
+    "таблиц",
+    "определен",
+    "термин",
+    "качеств",
+    "метод",
+)
+CORPUS_LIST_CONTEXT = (
+    "ты знаешь",
+    "вы знаете",
+    "в корпусе",
+    "в базе",
+    "корпус",
+    "доступн",
+    "есть",
+)
+CORPUS_LIST_VERBS = ("перечисли", "список", "перечень", "назови")
+
+
+def is_corpus_list_question(question: str) -> bool:
+    """Strict detector for "which standards are in the corpus" inventory questions."""
+    q = question.lower().strip()
+    if re.search(r"(?:ссыл|ссыла|связан)", q):
+        return False
+    if GOST_RE.search(q):
+        return False
+    if not re.search(r"(?:гост|стандарт|пнст|нормативн)", q):
+        return False
+    if any(marker in q for marker in CORPUS_LIST_NEGATIVE):
+        return False
+    if any(verb in q for verb in CORPUS_LIST_VERBS):
+        return True
+    if CORPUS_LIST_RE.search(q):
+        return any(marker in q for marker in CORPUS_LIST_CONTEXT)
+    return False
+
 
 def classify_question(question: str) -> str:
     q = question.lower().strip()
@@ -41,6 +92,8 @@ def classify_question(question: str) -> str:
         return "binary"
     if "когда" in q and ("введ" in q or "действ" in q or "опубликов" in q):
         return "temporal"
+    if is_corpus_list_question(q):
+        return "corpus_list"
     if any(marker in q for marker in ("какие", "перечисли", "этапы", "слои", "характеристики", "виды", "состав")):
         return "enumeration"
     if any(marker in q for marker in ("что такое", "дай определение", "определение", "что понимается")):

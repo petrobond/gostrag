@@ -8,6 +8,7 @@ import structlog
 from app.config import Settings
 from app.embeddings.base import Embedder
 from app.rag.chunk_store import ChunkStore
+from app.rag.gost_refs import build_gost_alias_map, resolve_gost_references
 from app.rag.query_classifier import (
     classify_question,
     extract_appendix,
@@ -59,6 +60,7 @@ class Retriever:
         self.qdrant = qdrant
         self.chunks = chunks
         self.kb = kb
+        self.gost_aliases = build_gost_alias_map(self.chunks.by_gost.keys())
 
     async def retrieve(
         self,
@@ -66,6 +68,7 @@ class Retriever:
         top_k: int = 6,
         gost_number: str | None = None,
     ) -> list[RetrievedChunk]:
+        query = self.resolve_query(query)
         exact_gost, exact_clause = self._extract_reference(query, gost_number)
         table_number = extract_table_ref(query)
         question_type = classify_question(query)
@@ -365,6 +368,7 @@ class Retriever:
         top_k: int = 4,
     ) -> list[RetrievedChunk]:
         """Comparison retrieval: multi-hop for several standards, per-entity for one."""
+        query = self.resolve_query(query)
         if len(gost_numbers) >= 2:
             return await self.retrieve_multi(query, gost_numbers, top_k=top_k)
         gost = gost_numbers[0] if gost_numbers else None
@@ -405,6 +409,10 @@ class Retriever:
             if (payload := self.chunks.get(hit.chunk_id))
             and payload["gost_number"] == gost
         ]
+
+    def resolve_query(self, query: str) -> str:
+        """Expand known short GOST references (years omitted) to corpus values."""
+        return resolve_gost_references(query, self.gost_aliases)
 
     @staticmethod
     def _extract_reference(query: str, gost_number: str | None) -> tuple[str | None, str | None]:
