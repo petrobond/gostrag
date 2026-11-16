@@ -185,7 +185,7 @@ python -m app.cli web-user invite --email user@example.ru          # reset-сс�
 ```bash
 curl -s localhost:8000/health | python -m json.tool    # web_ready: true
 bash scripts/smoke_web.sh http://127.0.0.1:8000
-curl -sI https://$WEB_DOMAIN/login | head -1           # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://$WEB_DOMAIN/login  # 200
 curl -s -o /dev/null -w '%{http_code}\n' https://$WEB_DOMAIN/api/ask  # 404
 ```
 

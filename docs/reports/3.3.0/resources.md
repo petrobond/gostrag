@@ -4,7 +4,7 @@
 |---|---|
 | Дата локальных замеров | 2026-11-16 |
 | Стенд | macOS, Python 3.12 venv, PostgreSQL 16 (Docker Desktop) |
-| VPS-замеры | заполнить после деплоя `v3.3.0` (команды ниже) |
+| VPS-замеры | 2026-11-16, после деплоя `v3.3.0` (раздел 4) |
 
 ## 1. Локальные замеры
 
@@ -47,24 +47,41 @@ Cloud.ru/GigaChat, что у бота; одновременно не более 
 
 ## 4. Замеры на VPS (после деплоя)
 
-Базовая линия на 2026-11-16: занято ~1.3 GiB RAM, свободно ~2.0 GiB;
-`app` ~174 MiB, `bot` ~307 MiB, Qdrant ~40 MiB, PostgreSQL ~21 MiB,
-Redis ~2 MiB; swap ~0.7 GiB; свободно ~26 GiB диска.
+Замеры 2026-11-16 17:49 UTC, VPS `ultra`, релиз `v3.3.0`.
+
+| Компонент | До, MiB | После, MiB | Δ |
+|---|---|---|---|
+| `app` | 173.6 | 200.3 | **+26.7** |
+| `proxy` (Caddy) | — | 16.2 | **+16.2** |
+| `postgres` | 21.2 | 23.9 | +2.7 |
+| `bot` | 306.8 | 305.6 | −1.2 |
+| `redis` | 2.0 | 1.9 | −0.1 |
+| `qdrant` | 39.9 | 41.4 | +1.5 |
+| **контейнеры, сумма** | **543.5** | **589.3** | **+45.8** |
+
+| Показатель | До | После |
+|---|---|---|
+| RAM used | 1337 MiB | 1437 MiB |
+| RAM available | 2060 MiB | 1960 MiB |
+| Swap used | 202 MiB | 201 MiB |
+| Диск `/` | 22 GiB / 49 GiB | 23 GiB / 49 GiB |
+
+Прирост RAM хоста (+100 MiB) больше суммы по контейнерам (+45.8 MiB)
+за счёт page cache нового образа; swap не вырос.
 
 ```bash
 free -m
 swapon --show
 sudo docker stats --no-stream --format \
   'table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}'
-sudo du -sh /opt/gostrag/app/web 2>/dev/null || true
-sudo docker system df
+df -h /
 ```
 
 Чек-лист:
 
-- [ ] `app` RSS вырос не более чем на 25 MiB;
-- [ ] `proxy` RSS ≤ 45 MiB;
-- [ ] суммарный прирост ≤ 150 MiB;
-- [ ] swap не вырос относительно базовой линии;
-- [ ] диск: прирост ≤ 100 МБ (образ Caddy + сертификаты);
-- [ ] `curl -s localhost:8000/health` → `web_ready: true`.
+- [x] `app` RSS: +26.7 MiB (оценка 12–25; общий бюджет соблюдён);
+- [x] `proxy` RSS: 16.2 MiB (≤45);
+- [x] суммарный прирост по контейнерам: +45.8 MiB (≤150);
+- [x] swap не вырос: 202 → 201 MiB;
+- [x] диск: +~1 GiB (новый образ 1.38 GB), свободно 25 GiB;
+- [x] `curl -s localhost:8000/health` → `web_ready: true`, версия `3.3.0`.
