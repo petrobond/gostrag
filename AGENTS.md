@@ -31,14 +31,15 @@ eval, judge и audit выполняются локально; VPS `ultra` — т
   `/kb`, `/term`, `/links`; публичный доступ для всех, `/stats`, `/audit`,
   `/audit_status` — только владелец (TELEGRAM_ADMIN_IDS)
 - `app/` — FastAPI: `POST /api/ask`, `GET /health` (version, commit, collection, kb_ready, web_ready)
-- `app/web/` — веб-интерфейс v3.3.0: Jinja2 + htmx, cookie-сессии (`__Host-`,
+- `app/web/` — веб-интерфейс v3.4.0: Jinja2 + htmx, cookie-сессии (`__Host-`,
   HttpOnly, Secure), Argon2id, CSRF, приглашения, история диалогов, админка;
+  `/tools/*` — стандарты, разделы, термины, связи; команды/палитра;
   таблицы `web_*` в PostgreSQL, миграции в `app/web/migrations.py`
 - RAG: короткие номера ГОСТов (`ГОСТ Р 71476`) раскрываются по манифесту корпуса;
   список стандартов отвечает детерминированно из `documents.json` (37 стандартов,
   38 документов, 37 мета-цитат); term catalog 71476 — 105 терминов, adaptive
   planner + LLM-listwise selector поднаборов
-- версия продукта: **3.3.3** (pyproject = APP_VERSION = `/health`)
+- версия продукта: **3.4.0** (pyproject = APP_VERSION = `/health`)
 - CI/CD: GitHub Actions (ruff, pytest, build linux/amd64), GHCR, deploy по тегу `v*`
 - образ по умолчанию без `fastembed`/ONNX; `INSTALL_LOCAL_EMBEDDINGS=true` — fallback
 - Qdrant — коллекция `gost_chunks_bge_m3_v3` (BGE-M3, 4446 точек, корпус
@@ -102,7 +103,7 @@ VPS (ultraVDS):
 Локально:
 
 ```bash
-.venv/bin/python -m pytest -q tests          # 167 тестов
+.venv/bin/python -m pytest -q tests          # 176 тестов
 .venv/bin/python -m ruff check app bot eval tests
 .venv/bin/python scripts/net_matrix.py        # сеть: Telegram, VPS, Cloud.ru, GigaChat
 .venv/bin/python scripts/ask.py "вопрос"
@@ -179,7 +180,7 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 
 ## 9. Тесты и метрики (v3.2, BGE-M3)
 
-- `pytest`: **167 passed, 5 skipped**; ruff clean (app bot eval tests)
+- `pytest`: **176 passed, 5 skipped**; ruff clean (app bot eval tests)
 - gold v2 (37, BGE-M3): pass **0.973 (36/37)**, recall@8 **1.000 (28/28)**,
   citation 0.963, citation recall **1.000 (54/54)**, faithfulness/relevancy 0.919
 - gold v3 (50, 19 стандартов): retrieval **1.000 (41/41)**, pass **1.000 (50/50)**,
@@ -259,7 +260,9 @@ outline и corpus `2026.11.13-r2`), `v3.2.3` (меню команд Telegram),
 `plans/10-plan-v3.3.1-rag-answers.md`),
 `v3.3.2` (Enter после HTMX-свопа через делегирование событий),
 `v3.3.3` (морфология ГОСТов, term catalog 71476, adaptive planner
-и LLM-поднаборы; план `plans/11-plan-v3.3.3-adaptive-retrieval.md`).
+и LLM-поднаборы; план `plans/11-plan-v3.3.3-adaptive-retrieval.md`),
+`v3.4.0` (веб-инструменты `/tools/*`, команды и палитра; план
+`plans/12-plan-v3.4.0-web-tools.md`).
 
 ## 12. Чек-лист приёмки этапа 0
 
