@@ -13,10 +13,13 @@
     <a class="brand" href="/chat">gostrag</a>
     <nav class="topnav">
       <a href="/chat">Чат</a>
+      <a href="/tools/gosts">Инструменты</a>
+      <a href="/help">Помощь</a>
       {% if user.role == 'admin' %}<a href="/admin">Админ</a>{% endif %}
       <a href="/password">Пароль</a>
     </nav>
     <div class="who">
+      <button type="button" class="link-button command-trigger" data-command-open>Команды</button>
       <span class="email" title="{{ user.email }}">{{ user.email }}</span>
       <span class="badge">{{ 'админ' if user.role == 'admin' else 'пользователь' }}</span>
       <form method="post" action="/logout" class="inline">
@@ -25,6 +28,35 @@
       </form>
     </div>
   </header>
+  {% endif %}
+  {% if user %}
+  <nav class="mobile-tools-nav" aria-label="Мобильная навигация">
+    <a href="/chat">Чат</a>
+    <a href="/tools/gosts">Стандарты</a>
+    <a href="/tools/terms">Термины</a>
+    <a href="/help">Помощь</a>
+    {% if user.role == 'admin' %}<a href="/admin">Админ</a>{% endif %}
+  </nav>
+  <div class="command-backdrop" data-command-palette hidden>
+    <section class="command-panel" role="dialog" aria-modal="true" aria-label="Команды">
+      <div class="command-head">
+        <strong>Команды</strong>
+        <button type="button" class="icon-button" data-command-close aria-label="Закрыть">×</button>
+      </div>
+      <input type="search" class="command-search" data-command-search
+             placeholder="Найти команду…" autocomplete="off">
+      <div class="command-list" data-command-list>
+        {% for command in commands %}
+        <a class="command-item" href="{{ command.href }}" data-command-item
+           data-command-name="/{{ command.name }}" data-command-desc="{{ command.description|lower }}">
+          <span class="command-name">/{{ command.name }}</span>
+          <span class="command-desc">{{ command.description }}</span>
+          <code class="command-usage">{{ command.usage }}</code>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
   {% endif %}
   <main class="{% block main_class %}page{% endblock %}">
     {% block content %}{% endblock %}

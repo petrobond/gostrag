@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Помощь — gostrag{% endblock %}
+{% block content %}
+<div class="tools-head">
+  <div>
+    <h1>Помощь</h1>
+    <p class="muted small">Веб-команды повторяют основные команды Telegram-бота.</p>
+  </div>
+  <a class="button-link" href="/chat">Вернуться в чат</a>
+</div>
+
+{% if unknown %}
+<div class="alert alert-error" role="alert">Неизвестная команда: <code>/{{ unknown }}</code>. Выберите команду ниже.</div>
+{% endif %}
+{% if forbidden %}
+<div class="alert alert-error" role="alert">Эта команда доступна только администратору.</div>
+{% endif %}
+
+<section class="card">
+  <h2>Команды</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Команда</th><th>Что делает</th><th>Пример</th></tr></thead>
+      <tbody>
+        {% for command in commands %}
+        <tr>
+          <td><code>/{{ command.name }}</code>{% if command.admin %} <span class="badge">админ</span>{% endif %}</td>
+          <td>{{ command.description }}</td>
+          <td><code>{{ command.usage }}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small">Команды можно ввести в поле вопроса или открыть кнопкой «Команды». Для вопроса без команды просто напишите текст — он уйдёт в RAG.</p>
+</section>
+
+<section class="card">
+  <h2>Справочники</h2>
+  <p><a href="/tools/gosts">Стандарты</a> — полный список, разделы, термины и связи.</p>
+  <p><a href="/tools/terms">Термины</a> — поиск по каталогу терминов.</p>
+  <p class="muted small">Команды <code>stats</code>, <code>audit</code> и <code>audit_status</code> доступны только администратору. Аудит в вебе — только просмотр отчётов и статуса.</p>
+</section>
+{% endblock %}

@@ -73,12 +73,20 @@ async def dashboard(request: Request):
         return _forbidden(request, user)
     store = _store(request)
     stats = await store.web_stats(days=30) if store is not None else {}
+    usage = getattr(request.app.state, "usage", None)
+    telegram_stats: dict = {}
+    if usage is not None:
+        try:
+            telegram_stats = await usage.stats(days=30)
+        except Exception:  # noqa: BLE001 - bot stats are optional
+            telegram_stats = {}
     settings = request.app.state.settings
     return render(
         request,
         "admin/dashboard.html",
         user=user,
         stats=stats,
+        telegram_stats=telegram_stats,
         corpus_version=settings.corpus_version,
         collection=settings.qdrant_collection,
         index_ready=request.app.state.service is not None,
@@ -251,11 +259,19 @@ async def audit_page(request: Request):
     if user["role"] != "admin":
         return _forbidden(request, user)
     settings = request.app.state.settings
+    from app.web.tool_data import ToolService
+
+    summary = ToolService(
+        settings,
+        service=getattr(request.app.state, "service", None),
+        s3=getattr(request.app.state, "s3", None),
+    ).latest_audit()
     return render(
         request,
         "admin/audit.html",
         user=user,
         items=_collect_audit(settings),
+        summary=summary,
         error=None,
     )
 

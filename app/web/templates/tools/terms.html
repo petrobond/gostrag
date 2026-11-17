@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Термины — gostrag{% endblock %}
+{% block content %}
+<div class="tools-head">
+  <div>
+    <h1>Термины</h1>
+    <p class="muted small">Поиск по терминам корпуса. Для полного каталога 71476 — 105 терминов.</p>
+  </div>
+</div>
+<form method="get" action="/tools/terms" class="tools-search">
+  <input type="search" name="q" value="{{ query }}" placeholder="Термин или часть определения…" aria-label="Поиск термина">
+  <select name="gost" aria-label="Стандарт">
+    <option value="">Все стандарты</option>
+    {% for item in standards %}
+    <option value="{{ item.gost_number }}" {% if item.gost_number == gost %}selected{% endif %}>{{ item.gost_number }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="primary">Найти</button>
+  {% if query or gost %}<a class="button-link" href="/tools/terms">Сбросить</a>{% endif %}
+</form>
+
+<section class="card">
+  <h2>Найдено: {{ terms|length }}</h2>
+  {% if query or gost %}
+  <p class="muted small">Запрос: {% if query %}«{{ query }}»{% else %}все{% endif %}{% if gost %} · {{ gost }}{% endif %}</p>
+  {% endif %}
+  <div class="term-list">
+    {% for term in terms %}
+    <article class="term-card">
+      <strong>{{ term.term }}</strong>
+      <div>{{ term.definition[:500] }}{% if term.definition|length > 500 %}…{% endif %}</div>
+      <div class="muted small">{{ term.gost }}, п. {{ term.clause }}, с. {{ term.page }}</div>
+    </article>
+    {% else %}
+    <p class="muted">Термины не найдены. Попробуйте другое слово или выберите стандарт.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

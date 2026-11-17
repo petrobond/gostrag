@@ -10,6 +10,7 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
 from app.web.auth import apply_csrf_cookie, current_or_new_csrf
+from app.web.commands import visible_commands
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -51,6 +52,7 @@ def render(
             "app_version": settings.app_version,
             "corpus_version": settings.corpus_version,
             "web_domain": settings.web_domain,
+            "commands": visible_commands(user),
             **context,
         },
         status_code=status_code,

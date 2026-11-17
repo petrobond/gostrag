@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Стандарты — gostrag{% endblock %}
+{% block content %}
+<div class="tools-head">
+  <div>
+    <h1>Стандарты</h1>
+    <p class="muted small">В корпусе {{ total }} стандартов. Нажмите на обозначение, чтобы открыть разделы, термины и связи.</p>
+  </div>
+  <form method="get" action="/tools/gosts" class="tools-search">
+    <input type="search" name="q" value="{{ query }}" placeholder="Номер или название…" aria-label="Поиск стандарта">
+    <button type="submit" class="secondary">Найти</button>
+    <a class="button-link" href="/help">Команды</a>
+  </form>
+</div>
+<section class="card">
+  <div class="table-wrap">
+    <table class="table tool-table">
+      <thead>
+        <tr><th>Обозначение</th><th>Название</th><th>Документов</th><th>Фрагментов</th><th>PDF</th></tr>
+      </thead>
+      <tbody>
+        {% for item in standards %}
+        <tr>
+          <td><a class="tool-link" href="/tools/gosts/{{ item.gost_number|urlencode }}">{{ item.gost_number }}</a></td>
+          <td>{{ item.title }}</td>
+          <td>{{ item.documents }}</td>
+          <td>{{ item.chunks }}</td>
+          <td>
+            {% if item.pdf_url %}<a href="{{ item.pdf_url }}" target="_blank" rel="noopener noreferrer">Открыть</a>{% else %}<span class="muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Ничего не найдено. Попробуйте другой запрос.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ standard.gost_number }} — gostrag{% endblock %}
+{% block content %}
+<div class="tools-head">
+  <div>
+    <p class="muted small"><a href="/tools/gosts">← Все стандарты</a></p>
+    <h1>{{ standard.gost_number }}</h1>
+    <p class="muted">{{ standard.title }}</p>
+    <p class="muted small">{{ standard.documents }} документ(ов) · {{ standard.chunks }} фрагментов</p>
+  </div>
+  <div class="tools-search">
+    {% if standard.pdf_url %}<a class="button-link" href="{{ standard.pdf_url }}" target="_blank" rel="noopener noreferrer">Открыть PDF</a>{% endif %}
+    <a class="button-link" href="/tools/terms?gost={{ standard.gost_number|urlencode }}">Искать термин</a>
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Разделы стандарта">
+  <a class="{% if tab == 'outline' %}active{% endif %}" href="/tools/gosts/{{ gost_path }}?tab=outline">Разделы</a>
+  <a class="{% if tab == 'terms' %}active{% endif %}" href="/tools/gosts/{{ gost_path }}?tab=terms">Термины ({{ terms|length }})</a>
+  <a class="{% if tab == 'links' %}active{% endif %}" href="/tools/gosts/{{ gost_path }}?tab=links">Связи</a>
+</nav>
+
+{% if tab == 'outline' %}
+<section class="card">
+  <h2>Разделы</h2>
+  {% if outline and outline.sections %}
+    {% for section in outline.sections %}
+    <div class="tool-section">
+      <h3>{{ section.section }}{% if section.title %} — {{ section.title }}{% endif %}</h3>
+      <ul class="clause-list">
+        {% for clause in section.clauses %}
+        <li>
+          <span>{{ clause.clause }}{% if clause.title %} — {{ clause.title }}{% endif %}</span>
+          <span class="muted">с. {{ clause.page }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  {% else %}
+  <p class="muted">Структура стандарта недоступна.</p>
+  {% endif %}
+</section>
+{% elif tab == 'terms' %}
+<section class="card">
+  <h2>Термины</h2>
+  {% if terms %}
+  <p class="muted small">Найдено {{ terms|length }} терминов. Определения приведены по пунктам стандарта.</p>
+  <div class="term-list">
+    {% for term in terms %}
+    <article class="term-card">
+      <strong>{{ term.clause }} {{ term.term }}</strong>
+      <div>{{ term.definition[:500] }}{% if term.definition|length > 500 %}…{% endif %}</div>
+      <div class="muted small">{{ term.gost }}, п. {{ term.clause }}, с. {{ term.page }}</div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Для этого стандарта термины в каталоге не найдены.</p>
+  {% endif %}
+</section>
+{% else %}
+<section class="card">
+  <h2>Связи</h2>
+  <h3>Исходящие</h3>
+  {% if links.outgoing %}
+  <ul class="link-list">
+    {% for edge in links.outgoing %}
+    <li>→ <strong>{{ edge.target }}</strong>
+      <span class="{% if edge.internal %}badge-internal{% else %}badge-external{% endif %}">{{ 'в корпусе' if edge.internal else 'внешний' }}</span>
+      <span class="muted">п. {{ edge.clause }}, с. {{ edge.page }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">Исходящих связей нет.</p>{% endif %}
+  <h3>Входящие</h3>
+  {% if links.incoming %}
+  <ul class="link-list">
+    {% for edge in links.incoming %}
+    <li>← <strong>{{ edge.source }}</strong>
+      <span class="muted">п. {{ edge.clause }}, с. {{ edge.page }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">Входящих связей нет.</p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

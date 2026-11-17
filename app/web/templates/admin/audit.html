@@ -3,6 +3,22 @@
 {% block content %}
 {% include "admin/nav.html" %}
 {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<section class="card" id="status">
+  <h2>Статус аудита</h2>
+  {% if summary %}
+  <dl class="facts">
+    <dt>Версия</dt><dd>{{ summary.product_version or '—' }}</dd>
+    <dt>Coverage</dt><dd>{{ '%.1f'|format((summary.coverage or 0) * 100) }}%</dd>
+    <dt>Compliance (применимые)</dt><dd>{{ '%.1f'|format((summary.compliance_applicable or 0) * 100) }}%</dd>
+    <dt>Требований</dt><dd>{{ summary.requirements_total or 0 }}</dd>
+    <dt>Обновлён</dt><dd>{{ summary.mtime|dt }}</dd>
+  </dl>
+  <p class="muted small"><code>{{ summary.path }}</code></p>
+  {% else %}
+  <p class="muted">Manifest аудита ещё не найден. Запуск аудита — через `scripts/audit.py`, веб работает в режиме чтения.</p>
+  {% endif %}
+</section>
+
 <section class="card">
   <h2>Отчёты аудита</h2>
   <p class="muted small">Только просмотр: отчёты создаются локально командой <code>scripts/audit.py</code>.</p>

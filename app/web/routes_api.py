@@ -107,12 +107,20 @@ async def admin_stats(request: Request) -> dict:
     store = _store(request)
     stats = await store.web_stats(days=30)
     settings = request.app.state.settings
+    usage = getattr(request.app.state, "usage", None)
+    telegram_stats = {}
+    if usage is not None:
+        try:
+            telegram_stats = await usage.stats(days=30)
+        except Exception:  # noqa: BLE001
+            telegram_stats = {}
     stats.update(
         {
             "corpus_version": settings.corpus_version,
             "collection": settings.qdrant_collection,
             "index_ready": request.app.state.service is not None,
             "web_ready": bool(getattr(request.app.state, "web_ready", False)),
+            "telegram": telegram_stats,
         }
     )
     return stats

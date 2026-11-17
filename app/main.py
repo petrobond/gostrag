@@ -18,6 +18,7 @@ from app.config import Settings, get_settings
 from app.guard.rate_limit import SlidingWindowLimiter
 from app.rag.service import AskService
 from app.storage.s3 import S3Store
+from app.storage.usage import UsageStore
 from app.web.auth import LoginRequired, attach_security_headers
 from app.web.migrations import apply_migrations
 from app.web.ratelimit import LoginThrottle
@@ -51,6 +52,7 @@ async def _init_web(app: FastAPI, cfg: Settings) -> None:
                 logger.info("web migrations applied: %s", ", ".join(applied))
         app.state.db = pool
         app.state.web_store = WebStore(pool)
+        app.state.usage = UsageStore(cfg.postgres_dsn, pool=pool)
         try:
             app.state.s3 = await asyncio.wait_for(
                 asyncio.to_thread(S3Store, cfg), timeout=15
@@ -74,6 +76,7 @@ async def lifespan(app: FastAPI):
     app.state.service = None
     app.state.db = None
     app.state.web_store = None
+    app.state.usage = None
     app.state.web_ready = False
     app.state.s3 = None
     try:
@@ -96,6 +99,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.state.service = None
     app.state.db = None
     app.state.web_store = None
+    app.state.usage = None
     app.state.web_ready = False
     app.state.s3 = None
     app.state.login_throttle = LoginThrottle(
@@ -112,10 +116,12 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
         from app.web.routes_api import router as web_api_router
         from app.web.routes_chat import router as web_chat_router
         from app.web.routes_pages import router as web_pages_router
+        from app.web.routes_tools import router as web_tools_router
         from app.web.templating import STATIC_DIR
 
         app.include_router(web_pages_router)
         app.include_router(web_chat_router)
+        app.include_router(web_tools_router)
         app.include_router(web_admin_router)
         app.include_router(web_api_router, prefix="/api/web")
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

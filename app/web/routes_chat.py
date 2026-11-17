@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from app.web.auth import require_user_page, verify_csrf
 from app.web.chat import (
@@ -17,6 +17,7 @@ from app.web.chat import (
     clean_question,
     parse_citations,
 )
+from app.web.commands import command_url, parse_command
 from app.web.forms import read_payload
 from app.web.templating import render
 
@@ -121,6 +122,41 @@ async def chat_ask(request: Request):
     question = clean_question(payload.get("question"))
     conversation_id = str(payload.get("conversation_id") or "") or None
     htmx = _is_htmx(request)
+
+    command = parse_command(question)
+    if command is not None:
+        if command.unknown:
+            target = command_url(command)
+            if htmx:
+                return Response(status_code=200, headers={"HX-Redirect": target})
+            return RedirectResponse(target, status_code=303)
+        if command.command is not None and command.command.admin and user["role"] != "admin":
+            return await _failed(
+                request,
+                user,
+                conversation_id,
+                question,
+                "Команда доступна только администратору.",
+                200 if htmx else 403,
+                htmx,
+            )
+        if command.name == "ask":
+            question = command.argument
+            if not question:
+                return await _failed(
+                    request,
+                    user,
+                    conversation_id,
+                    "",
+                    "Напишите вопрос после /ask.",
+                    200 if htmx else 422,
+                    htmx,
+                )
+        else:
+            target = command_url(command)
+            if htmx:
+                return Response(status_code=200, headers={"HX-Redirect": target})
+            return RedirectResponse(target, status_code=303)
 
     try:
         result = await ask_and_store(

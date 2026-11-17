@@ -18,6 +18,21 @@
     <dt>Индекс</dt><dd>{{ 'готов' if index_ready else 'не загружен' }}</dd>
     <dt>Веб-интерфейс</dt><dd>{{ 'готов' if web_ready else 'недоступен' }}</dd>
   </dl>
-  <p class="muted small">Статистика Telegram-бота доступна командой /stats в боте.</p>
+</section>
+
+<section class="card">
+  <h2>Бот / PostgreSQL</h2>
+  {% if telegram_stats %}
+  <div class="stats-grid">
+    <div class="stat"><div class="stat-value">{{ telegram_stats.get('questions', 0) }}</div><div class="stat-label">вопросов за 30 дней</div></div>
+    <div class="stat"><div class="stat-value">{{ telegram_stats.get('refusals', 0) }}</div><div class="stat-label">отказов</div></div>
+    <div class="stat"><div class="stat-value">{{ telegram_stats.get('users', 0) }}</div><div class="stat-label">пользователей</div></div>
+    <div class="stat"><div class="stat-value">{{ telegram_stats.get('p50', 0) }} / {{ telegram_stats.get('p95', 0) }}</div><div class="stat-label">p50 / p95, мс</div></div>
+    <div class="stat"><div class="stat-value">{{ telegram_stats.get('tokens_in', 0) }} / {{ telegram_stats.get('tokens_out', 0) }}</div><div class="stat-label">токены in / out</div></div>
+  </div>
+  <p class="muted small">Источник: <code>qa_log</code> / <code>usage_daily</code>; данные Telegram-бота.</p>
+  {% else %}
+  <p class="muted">Статистика PostgreSQL недоступна или ещё нет данных.</p>
+  {% endif %}
 </section>
 {% endblock %}

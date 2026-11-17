@@ -8,6 +8,11 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button type="submit" class="primary wide">+ Новый диалог</button>
     </form>
+    <nav class="sidebar-tools" aria-label="Справочники">
+      <a href="/tools/gosts">Стандарты</a>
+      <a href="/tools/terms">Термины</a>
+      <a href="/help">Помощь</a>
+    </nav>
     {% include "partials/conversation_list.html" %}
   </aside>
   <section class="thread">

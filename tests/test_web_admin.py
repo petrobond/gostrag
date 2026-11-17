@@ -39,7 +39,7 @@ def test_admin_stats_api_and_page(monkeypatch):
 
     stats = client.get("/api/web/admin/stats").json()
     assert stats["questions"] == 1
-    assert {"corpus_version", "collection", "index_ready", "web_ready"} <= set(stats)
+    assert {"corpus_version", "collection", "index_ready", "web_ready", "telegram"} <= set(stats)
     assert client.get("/admin").status_code == 200
 
 
