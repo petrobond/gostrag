@@ -195,6 +195,8 @@ curl -s localhost:6333/collections/gost_chunks_bge_m3_v2 | head -c 300
 - v3.3.3: морфология ГОСТов; term catalog 71476 — 105 терминов/7 подразделов;
   adaptive planner + LLM-listwise selector поднаборов; retrieval v3/v2 1.000;
   judge v3 47/50 (E04/M04/CL02 — strict/variance outliers)
+- v3.4.0: веб-инструменты `/tools/gosts|terms`, карточка стандарта, команды и
+  command palette, статистика веба + PG, read-only аудит; pytest 176 passed
 - gold-KB (10): **1.000 (10/10)**, citation **28/28** (v3.2.1); KB07 —
   «стандарты корпуса» → внутренняя ветка 71476, п. 2
 - audit v3.2: **157 требований / 15 ГОСТов**, N/A 15 (9.55%), coverage **90.45%**,
